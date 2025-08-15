@@ -1,0 +1,213 @@
+/Books
+/Books/direcotory generator.py
+/Books/directory_map.txt
+/Books/Primary School/
+/Books/Primary School/Year 1 (Ages 5-6)/
+/Books/Primary School/Year 1 (Ages 5-6)/English-Phonics/
+/Books/Primary School/Year 1 (Ages 5-6)/English-Phonics/Letters and Sounds/
+/Books/Primary School/Year 1 (Ages 5-6)/English-Phonics/Oxford Reading Tree/
+/Books/Primary School/Year 1 (Ages 5-6)/English-Phonics/Read Write Inc. Phonics/
+/Books/Primary School/Year 1 (Ages 5-6)/Maths/
+/Books/Primary School/Year 1 (Ages 5-6)/Maths/Power Maths Student Book 1/
+/Books/Primary School/Year 1 (Ages 5-6)/Maths/White Rose Maths schemes/
+/Books/Primary School/Year 1 (Ages 5-6)/Science/
+/Books/Primary School/Year 1 (Ages 5-6)/Science/Collins Primary Science - Book 1/
+/Books/Primary School/Year 1 (Ages 5-6)/Science/Snap Science/
+/Books/Primary School/Year 2 (Ages 6-7)/
+/Books/Primary School/Year 2 (Ages 6-7)/English-Phonics/
+/Books/Primary School/Year 2 (Ages 6-7)/English-Phonics/Letters and Sounds/
+/Books/Primary School/Year 2 (Ages 6-7)/English-Phonics/Oxford Reading Tree/
+/Books/Primary School/Year 2 (Ages 6-7)/English-Phonics/Read Write Inc. Phonics/
+/Books/Primary School/Year 2 (Ages 6-7)/Maths/
+/Books/Primary School/Year 2 (Ages 6-7)/Maths/Power Maths Student Book 2/
+/Books/Primary School/Year 2 (Ages 6-7)/Maths/White Rose Maths schemes/
+/Books/Primary School/Year 2 (Ages 6-7)/Science/
+/Books/Primary School/Year 2 (Ages 6-7)/Science/Collins Primary Science - Book 2/
+/Books/Primary School/Year 2 (Ages 6-7)/Science/Snap Science/
+/Books/Primary School/Year 3 (Ages 7-8)/
+/Books/Primary School/Year 3 (Ages 7-8)/English/
+/Books/Primary School/Year 3 (Ages 7-8)/English/Oxford Reading Tree/
+/Books/Primary School/Year 3 (Ages 7-8)/English/The Iron Man by Ted Hughes/
+/Books/Primary School/Year 3 (Ages 7-8)/Maths/
+/Books/Primary School/Year 3 (Ages 7-8)/Maths/Collins Primary Maths - Book 3/
+/Books/Primary School/Year 3 (Ages 7-8)/Maths/Power Maths Student Book 3/
+/Books/Primary School/Year 3 (Ages 7-8)/Maths/White Rose Maths schemes/
+/Books/Primary School/Year 3 (Ages 7-8)/Science/
+/Books/Primary School/Year 3 (Ages 7-8)/Science/Collins Primary Science - Book 3/
+/Books/Primary School/Year 3 (Ages 7-8)/Science/Snap Science/
+/Books/Primary School/Year 4 (Ages 8-9)/
+/Books/Primary School/Year 4 (Ages 8-9)/English/
+/Books/Primary School/Year 4 (Ages 8-9)/English/The Lion, the Witch and the Wardrobe by C.S. Lewis/
+/Books/Primary School/Year 4 (Ages 8-9)/English/Varjak Paw by SF Said/
+/Books/Primary School/Year 4 (Ages 8-9)/Maths/
+/Books/Primary School/Year 4 (Ages 8-9)/Maths/Collins Primary Maths - Book 4/
+/Books/Primary School/Year 4 (Ages 8-9)/Maths/Power Maths Student Book 4/
+/Books/Primary School/Year 4 (Ages 8-9)/Maths/White Rose Maths schemes/
+/Books/Primary School/Year 4 (Ages 8-9)/Science/
+/Books/Primary School/Year 4 (Ages 8-9)/Science/Collins Primary Science - Book 4/
+/Books/Primary School/Year 4 (Ages 8-9)/Science/Snap Science/
+/Books/Primary School/Year 5 (Ages 9-10)/
+/Books/Primary School/Year 5 (Ages 9-10)/English/
+/Books/Primary School/Year 5 (Ages 9-10)/English/Holes by Louis Sachar/
+/Books/Primary School/Year 5 (Ages 9-10)/English/Skellig by David Almond/
+/Books/Primary School/Year 5 (Ages 9-10)/Maths/
+/Books/Primary School/Year 5 (Ages 9-10)/Maths/Collins Primary Maths - Book 5/
+/Books/Primary School/Year 5 (Ages 9-10)/Maths/Power Maths Student Book 5/
+/Books/Primary School/Year 5 (Ages 9-10)/Maths/White Rose Maths schemes/
+/Books/Primary School/Year 5 (Ages 9-10)/Science/
+/Books/Primary School/Year 5 (Ages 9-10)/Science/Collins Primary Science - Book 5/
+/Books/Primary School/Year 5 (Ages 9-10)/Science/Snap Science/
+/Books/Primary School/Year 6 (Ages 10-11)/
+/Books/Primary School/Year 6 (Ages 10-11)/English/
+/Books/Primary School/Year 6 (Ages 10-11)/English/Goodnight Mister Tom by Michelle Magorian/
+/Books/Primary School/Year 6 (Ages 10-11)/English/Wonder by R.J. Palacio/
+/Books/Primary School/Year 6 (Ages 10-11)/Maths/
+/Books/Primary School/Year 6 (Ages 10-11)/Maths/CGP KS2 Maths SATS Revision Book/
+/Books/Primary School/Year 6 (Ages 10-11)/Maths/Power Maths Student Book 6/
+/Books/Primary School/Year 6 (Ages 10-11)/Maths/White Rose Maths schemes/
+/Books/Primary School/Year 6 (Ages 10-11)/Science/
+/Books/Primary School/Year 6 (Ages 10-11)/Science/CGP KS2 Science SATS Revision Book/
+/Books/Primary School/Year 6 (Ages 10-11)/Science/Collins Primary Science - Book 6/
+/Books/Secondary School/
+/Books/Secondary School/Year 7 (Key Stage 3)/
+/Books/Secondary School/Year 7 (Key Stage 3)/English/
+/Books/Secondary School/Year 7 (Key Stage 3)/English/A Monster Calls by Patrick Ness/
+/Books/Secondary School/Year 7 (Key Stage 3)/English/KS3 English Now by Collins/
+/Books/Secondary School/Year 7 (Key Stage 3)/English/Shakespeare's Romeo and Juliet/
+/Books/Secondary School/Year 7 (Key Stage 3)/Geography/
+/Books/Secondary School/Year 7 (Key Stage 3)/Geography/Geog.1 by Oxford University Press/
+/Books/Secondary School/Year 7 (Key Stage 3)/Geography/Progress in Geography- Key Stage 3 by Hodder/
+/Books/Secondary School/Year 7 (Key Stage 3)/History/
+/Books/Secondary School/Year 7 (Key Stage 3)/History/Hodder History- KS3 Discovery/
+/Books/Secondary School/Year 7 (Key Stage 3)/History/Knowing History - KS3 Book 1/
+/Books/Secondary School/Year 7 (Key Stage 3)/Maths/
+/Books/Secondary School/Year 7 (Key Stage 3)/Maths/Collins KS3 Maths - Student Book 1/
+/Books/Secondary School/Year 7 (Key Stage 3)/Maths/Pearson Edexcel KS3 Maths Progress - Pi-Theta-Delta Book 1/
+/Books/Secondary School/Year 7 (Key Stage 3)/Science/
+/Books/Secondary School/Year 7 (Key Stage 3)/Science/Activate for AQA KS3 Science - Student Book 1/
+/Books/Secondary School/Year 7 (Key Stage 3)/Science/Exploring Science- Working Scientifically - Year 7/
+/Books/Secondary School/Year 8 (Key Stage 3)/
+/Books/Secondary School/Year 8 (Key Stage 3)/English/
+/Books/Secondary School/Year 8 (Key Stage 3)/English/Noughts & Crosses by Malorie Blackman/
+/Books/Secondary School/Year 8 (Key Stage 3)/English/Private Peaceful by Michael Morpurgo/
+/Books/Secondary School/Year 8 (Key Stage 3)/English/Shakespeare's A Midsummer Night's Dream/
+/Books/Secondary School/Year 8 (Key Stage 3)/Geography/
+/Books/Secondary School/Year 8 (Key Stage 3)/Geography/Geog.2 by Oxford University Press/
+/Books/Secondary School/Year 8 (Key Stage 3)/Geography/Progress in Geography- Key Stage 3 by Hodder/
+/Books/Secondary School/Year 8 (Key Stage 3)/History/
+/Books/Secondary School/Year 8 (Key Stage 3)/History/Hodder History- KS3 Discovery/
+/Books/Secondary School/Year 8 (Key Stage 3)/History/Knowing History- The Tudors and Stuarts/
+/Books/Secondary School/Year 8 (Key Stage 3)/Maths/
+/Books/Secondary School/Year 8 (Key Stage 3)/Maths/Collins KS3 Maths - Student Book 2/
+/Books/Secondary School/Year 8 (Key Stage 3)/Maths/Pearson Edexcel KS3 Maths Progress - Pi-Theta-Delta Book 2/
+/Books/Secondary School/Year 8 (Key Stage 3)/Science/
+/Books/Secondary School/Year 8 (Key Stage 3)/Science/Activate for AQA KS3 Science - Student Book 2/
+/Books/Secondary School/Year 8 (Key Stage 3)/Science/Exploring Science- Working Scientifically - Year 8/
+/Books/Secondary School/Year 9 (Key Stage 3)/
+/Books/Secondary School/Year 9 (Key Stage 3)/English/
+/Books/Secondary School/Year 9 (Key Stage 3)/English/An Inspector Calls by J.B. Priestley/
+/Books/Secondary School/Year 9 (Key Stage 3)/English/Of Mice and Men by John Steinbeck/
+/Books/Secondary School/Year 9 (Key Stage 3)/Geography/
+/Books/Secondary School/Year 9 (Key Stage 3)/Geography/Geog.3 by Oxford University Press/
+/Books/Secondary School/Year 9 (Key Stage 3)/Geography/KS3 Geography- Heading towards GCSE by Collins/
+/Books/Secondary School/Year 9 (Key Stage 3)/History/
+/Books/Secondary School/Year 9 (Key Stage 3)/History/Hodder History- KS3 Discovery/
+/Books/Secondary School/Year 9 (Key Stage 3)/History/Knowing History- Industry, Empire and War/
+/Books/Secondary School/Year 9 (Key Stage 3)/Maths/
+/Books/Secondary School/Year 9 (Key Stage 3)/Maths/Collins KS3 Maths - GCSE-Ready/
+/Books/Secondary School/Year 9 (Key Stage 3)/Maths/Pearson Edexcel KS3 Maths Progress - Pi-Theta-Delta Book 3/
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/1. Biology_B1_Chapter1_Cells.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/10. Physics_P1_Chapter3_Light.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/11. Physics_P1_Chapter4_Space.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/12. Glossary.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/13. Index.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/14. Periodic_Table.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/2. Biology_B1_Chapter2_Structure_and_Function.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/3. Biology_B1_Chapter3_Reproduction.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/4. Chemistry_C1_Chapter1_Particles_and_Behaviour.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/5. Chemistry_C1_Chapter2_Elements_Atoms_and_Compounds.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/6. Chemistry_C1_Chapter3_Reactions.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/7. Chemistry_C1_Chapter4_Acids_and_Alkalis.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/8. Physics_P1_Chapter1_Forces.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/9. Physics_P1_Chapter2_Sound.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Activate for AQA KS3 Science - GCSE-Ready/Working_Scientifically.txt
+/Books/Secondary School/Year 9 (Key Stage 3)/Science/Collins KS3 Science - Student Book 3/
+/Books/Sixth Form - College/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Biology/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Biology/AQA Biology- A Level - Year 1 by Oxford University Press/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Business/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Business/AQA A-level Business Student Book 1 by Hodder/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Chemistry/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Chemistry/AQA Chemistry- A Level - Year 1 by Oxford University Press/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Economics/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Economics/A-Level Economics Student Book 1 by Alain Anderton (Pearson)/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/English Literature/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/English Literature/Course-specific texts (e.g., The Great Gatsby, Othello, A Streetcar Named Desire)/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Geography/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Geography/AQA A-level Geography by Oxford University Press/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/History/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/History/Access to History series (topic dependent, e.g., The Tudors) by Hodder/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Mathematics/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Mathematics/Pearson Edexcel A level Mathematics Student Book 1 (AS)/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Physics/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Physics/AQA Physics- A Level - Year 1 by Oxford University Press/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Psychology/
+/Books/Sixth Form - College/Year 12 (A-Level Year 1)/Psychology/AQA Psychology for A Level Year 1 & AS by Illuminate Publishing/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Biology/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Biology/AQA Biology- A Level - Year 2 by Oxford University Press/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Business/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Business/AQA A-level Business Student Book 2 by Hodder/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Chemistry/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Chemistry/AQA Chemistry- A Level - Year 2 by Oxford University Press/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Economics/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Economics/A-Level Economics Student Book 2 by Alain Anderton (Pearson)/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/English Literature/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/English Literature/Course-specific texts (e.g., The Handmaid's Tale, King Lear)/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Geography/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Geography/AQA A-level Geography by Oxford University Press (same book as Year 12)/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/History/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/History/Access to History series (topic dependent) by Hodder/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Mathematics/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Mathematics/Pearson Edexcel A level Mathematics Student Book 2/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Physics/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Physics/AQA Physics- A Level - Year 2 by Oxford University Press/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Psychology/
+/Books/Sixth Form - College/Year 13 (A-Level Year 2)/Psychology/AQA Psychology for A Level Year 2 by Illuminate Publishing/
+/Books/Years 10 & 11 (GCSE)/
+/Books/Years 10 & 11 (GCSE)/English Language/
+/Books/Years 10 & 11 (GCSE)/English Language/AQA GCSE English Language Student Book by Oxford University Press/
+/Books/Years 10 & 11 (GCSE)/English Language/CGP GCSE English Language Revision Guide/
+/Books/Years 10 & 11 (GCSE)/English Language/Pearson Edexcel GCSE (9-1) English Language Student Book/
+/Books/Years 10 & 11 (GCSE)/English Language/Pearson Edexcel GCSE (9-1) English Language Student Book/1. Reading_Skills.txt
+/Books/Years 10 & 11 (GCSE)/English Language/Pearson Edexcel GCSE (9-1) English Language Student Book/2. Writing_Skills.txt
+/Books/Years 10 & 11 (GCSE)/English Language/Pearson Edexcel GCSE (9-1) English Language Student Book/3. Paper_1_-_Non-fiction_&_Transactional_Writing.txt
+/Books/Years 10 & 11 (GCSE)/English Language/Pearson Edexcel GCSE (9-1) English Language Student Book/4. Paper_2_-_Poetry_&_Prose_Texts;_Imaginative_Writing.txt
+/Books/Years 10 & 11 (GCSE)/English Language/Pearson Edexcel GCSE (9-1) English Language Student Book/5. Paper_3_-_Poetry_&_Prose_Texts;_Imaginative_Writing_(Coursework).txt
+/Books/Years 10 & 11 (GCSE)/English Language/Pearson Edexcel GCSE (9-1) English Language Student Book/6. Exam_Preparations.txt
+/Books/Years 10 & 11 (GCSE)/English Language/Pearson Edexcel GCSE (9-1) English Language Student Book/7. Glossary.txt
+/Books/Years 10 & 11 (GCSE)/English Literature Set Texts/
+/Books/Years 10 & 11 (GCSE)/English Literature Set Texts/A Christmas Carol by Charles Dickens/
+/Books/Years 10 & 11 (GCSE)/English Literature Set Texts/An Inspector Calls by J.B. Priestley/
+/Books/Years 10 & 11 (GCSE)/English Literature Set Texts/AQA-Edexcel-OCR Power and Conflict or Love and Relationships Poetry Anthologies/
+/Books/Years 10 & 11 (GCSE)/English Literature Set Texts/Macbeth by William Shakespeare/
+/Books/Years 10 & 11 (GCSE)/English Literature Set Texts/The Strange Case of Dr Jekyll and Mr Hyde by Robert Louis Stevenson/
+/Books/Years 10 & 11 (GCSE)/Geography/
+/Books/Years 10 & 11 (GCSE)/Geography/AQA GCSE Geography by Oxford University Press/
+/Books/Years 10 & 11 (GCSE)/Geography/Edexcel GCSE (9-1) Geography B Student Book by Pearson/
+/Books/Years 10 & 11 (GCSE)/History/
+/Books/Years 10 & 11 (GCSE)/History/AQA GCSE History- Britain- Health and the People by Hodder/
+/Books/Years 10 & 11 (GCSE)/History/AQA GCSE History- Germany, 1890-1945- Democracy and Dictatorship by Hodder/
+/Books/Years 10 & 11 (GCSE)/History/Edexcel GCSE (9-1) History- Medicine in Britain, c1250-present by Pearson/
+/Books/Years 10 & 11 (GCSE)/History/Edexcel GCSE (9-1) History- Weimar and Nazi Germany, 1918-39 by Pearson/
+/Books/Years 10 & 11 (GCSE)/Mathematics/
+/Books/Years 10 & 11 (GCSE)/Mathematics/AQA GCSE Maths Higher Student Book by Collins/
+/Books/Years 10 & 11 (GCSE)/Mathematics/CGP GCSE Maths Higher Level Revision Guide/
+/Books/Years 10 & 11 (GCSE)/Mathematics/Pearson Edexcel GCSE (9-1) Mathematics Higher Student Book/
+/Books/Years 10 & 11 (GCSE)/Science (Combined & Triple)/
+/Books/Years 10 & 11 (GCSE)/Science (Combined & Triple)/AQA GCSE Biology-Chemistry-Physics Student Books by Oxford University Press/
+/Books/Years 10 & 11 (GCSE)/Science (Combined & Triple)/CGP GCSE Science Revision Guides/
+/Books/Years 10 & 11 (GCSE)/Science (Combined & Triple)/Pearson Edexcel GCSE (9-1) Combined Science-Biology-Chemistry-Physics Student Books/
