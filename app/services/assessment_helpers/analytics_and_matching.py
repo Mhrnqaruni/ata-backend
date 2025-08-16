@@ -22,15 +22,25 @@ def get_validated_config_from_job(job_record: 'Assessment') -> Union[assessment_
 
 def normalize_config_to_v2(job_record: 'Assessment') -> assessment_model.AssessmentConfigV2:
     """Takes a job record and ALWAYS returns an AssessmentConfigV2 model."""
+    # --- [THE FIX IS HERE] ---
+    # This function also needs to use model_validate on the dictionary from the DB.
     config = get_validated_config_from_job(job_record)
+    # --- [END OF FIX] ---
+    
     if isinstance(config, assessment_model.AssessmentConfigV2):
         return config
     
+    # This is V1 data, so we transform it.
     v1_questions_as_v2 = [assessment_model.QuestionConfigV2(**q.model_dump()) for q in config.questions]
-    v1_as_v2_section = assessment_model.SectionConfigV2(title="Main Section", questions=v1_questions_as_v2)
+    
+    v1_as_v2_section = assessment_model.SectionConfigV2(
+        title="Main Section",
+        questions=v1_questions_as_v2
+    )
     
     return assessment_model.AssessmentConfigV2(
-        assessmentName=config.assessmentName, classId=config.classId,
+        assessmentName=config.assessmentName,
+        classId=config.classId,
         scoringMethod=assessment_model.ScoringMethod.PER_QUESTION,
         includeImprovementTips=getattr(config, 'includeImprovementTips', False),
         sections=[v1_as_v2_section]

@@ -19,8 +19,8 @@ API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
     raise ValueError("FATAL ERROR: GOOGLE_API_KEY environment variable is not set.")
 
-GEMINI_PRO_MODEL = 'gemini-pro-vision' # Correct model for multi-modal
-GEMINI_FLASH_MODEL = 'gemini-1.5-flash-latest'
+GEMINI_PRO_MODEL = 'gemini-2.5-flash' # Correct model for multi-modal
+GEMINI_FLASH_MODEL = 'gemini-2.5-flash'
 genai.configure(api_key=API_KEY)
 
 
