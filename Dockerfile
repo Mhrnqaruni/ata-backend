@@ -1,41 +1,78 @@
-# ---- Use a single-stage build for simplicity and robustness ----
+# ---- STAGE 1: BUILDER (This is now a multi-stage build for better security) ----
+# We use a full Debian image here because it has the build tools we need.
+FROM python:3.10-bookworm as builder
 
-# Use the official Python 3.10 image to match the local development environment.
-FROM python:3.10-slim-bookworm
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
-# Set the working directory in the container.
+# Install system dependencies needed for building Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev
+
+# Set the working directory
 WORKDIR /usr/src/app
 
-# Set environment variables to prevent Python from writing .pyc files and to ensure
-# output is sent straight to the container logs without buffering.
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERed 1
-
-# Upgrade pip to the latest version.
+# Upgrade pip
 RUN pip install --upgrade pip
 
-# Copy the requirements file.
+# Copy only the requirements file to leverage Docker layer caching
 COPY requirements.txt .
 
-# Install all Python dependencies directly. This is the most reliable method.
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies
+RUN pip wheel --no-cache-dir --wheel-dir /usr/src/app/wheels -r requirements.txt
 
-# Create a non-root user to run the application for enhanced security.
+
+# ---- STAGE 2: FINAL IMAGE (Slim and Secure) ----
+# We start fresh with a slim image for a smaller, more secure final container.
+FROM python:3.10-slim-bookworm
+
+# Set the working directory
+WORKDIR /usr/src/app
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# --- [THE FIX IS HERE] ---
+# Install the RUNTIME system dependencies needed by Tesseract and PyMuPDF.
+# We switch to the root user temporarily to do this.
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    # Clean up the apt cache to keep the image size down
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+# --- [END OF FIX] ---
+
+# Create a non-root user to run the application
 RUN useradd --create-home appuser
 
-# Copy the application source code from your local machine into the container.
+# Copy the pre-compiled Python wheels from the builder stage
+COPY --from=builder /usr/src/app/wheels /wheels
+
+# Copy the application source code
 COPY ./app ./app
 COPY ./Books ./Books
 
-# Change the ownership of all application files to the non-root user.
+# Install the Python dependencies from the local wheels
+# This is much faster and doesn't require build tools in the final image.
+RUN pip install --no-cache /wheels/*
+
+# Create the directory for assessment uploads
+RUN mkdir -p /usr/src/app/assessment_uploads
+
+# Change the ownership of all application files to the non-root user
 RUN chown -R appuser:appuser /usr/src/app
 
-# Switch the active user from root to the new, non-privileged user.
+# Switch the active user to the new, non-privileged user
 USER appuser
 
-# Expose the port. Railway will automatically map its public-facing port to the
-# value of the $PORT environment variable inside the container.
-EXPOSE $PORT
+# Expose the port (Railway will use the $PORT variable)
+EXPOSE 8080
 
-# The command to run the application in production.
-CMD gunicorn -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:$PORT app.main:app
+# The command to run the application in production
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-w", "4", "-b", "0.0.0.0:8080", "app.main:app"]
