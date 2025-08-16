@@ -71,7 +71,7 @@ async def _execute_code_in_sandbox(user_id: str, code_to_execute: str, db: Datab
         restricted_globals['classes'] = classes_list
         restricted_globals['students'] = students_list
         restricted_globals['assessments'] = assessments_list
-        restricted_globals['print'] = capture_output
+        restricted_globals['_print_'] = capture_output
         
         # _getitem_ is still useful for safe dictionary access like `c['name']`
         restricted_globals['_getitem_'] = lambda obj, key: obj[key]
