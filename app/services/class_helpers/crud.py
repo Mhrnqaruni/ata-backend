@@ -46,19 +46,35 @@ def delete_class_by_id(class_id: str, db: DatabaseService) -> bool:
 
 # --- STUDENT-RELATED CORE BUSINESS LOGIC ---
 
-def add_student_to_class(class_id: str, student_data: student_model.StudentCreate, db: DatabaseService) -> Dict:
-    """Business logic to add a new student to a class."""
+def add_student_to_class(class_id: str, student_data: student_model.StudentCreate, db: DatabaseService) -> tuple[dict, bool]:
+    """
+    Business logic to add a new student to a class.
+    Returns a tuple: (student_record_as_dict, was_created_boolean).
+    """
     if not db.get_class_by_id(class_id):
         raise ValueError(f"Class with ID {class_id} not found")
 
-    # --- [THE FIX IS HERE] ---
-    # Check if a student with this ID already exists anywhere in the system.
-    existing_student = get_student_by_student_id(student_data.studentId, db)
+    existing_student = db.get_student_by_student_id(student_data.studentId)
     if existing_student:
-        # For V1, we will log a warning and skip this student.
-        # We return the existing student's data so the caller knows what happened.
-        print(f"WARNING: Student with ID {student_data.studentId} already exists. Skipping creation.")
-        return existing_student
+        # Convert existing SQLAlchemy object to dict before returning
+        existing_student_dict = {c.name: getattr(existing_student, c.name) for c in existing_student.__table__.columns}
+        return existing_student_dict, False # Return existing student, signal not created
+
+    new_student_id = f"stu_{uuid.uuid4().hex[:12]}"
+    new_student_record = student_data.model_dump()
+    new_student_record['id'] = new_student_id
+    new_student_record['class_id'] = class_id
+    new_student_record['overallGrade'] = 0
+    
+    # --- [THE FIX IS HERE] ---
+    # db.add_student returns the newly created SQLAlchemy Student object.
+    new_student_object = db.add_student(new_student_record)
+    
+    # We must convert this object to a dictionary before returning it.
+    new_student_dict = {c.name: getattr(new_student_object, c.name) for c in new_student_object.__table__.columns}
+    
+    # Now we correctly return a tuple of (dictionary, boolean).
+    return new_student_dict, True
     # --- [END OF FIX] ---
 
     new_student_id = f"stu_{uuid.uuid4().hex[:12]}"
