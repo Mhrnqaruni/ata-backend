@@ -24,9 +24,12 @@ python-dotenv
 # Testing Framework
 pytest
 
-
-psycopg[binary]
-asyncpg
-
+# --- Database & Migrations ---
+# Use the pre-compiled binary for psycopg2 to avoid build issues in Docker.
+psycopg2-binary
+# SQLAlchemy is the ORM.
+sqlalchemy
+# Alembic is for database migrations.
 alembic
-psycopg2
+# Asyncpg is a high-performance async driver that SQLAlchemy can use.
+asyncpg
