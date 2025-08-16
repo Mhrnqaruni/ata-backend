@@ -74,7 +74,7 @@ async def create_class_from_upload(name: str, file: UploadFile, db: DatabaseServ
                 validated_student = student_model.StudentCreate(**student_data)
                 
                 # The crud function now returns a tuple: (record, was_created_boolean)
-                _ , was_created = crud.add_student_to_class(
+                _ , was_created = crud.add_student_to_class_with_status(
                     class_id=new_class_object.id, 
                     student_data=validated_student, 
                     db=db
