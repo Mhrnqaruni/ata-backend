@@ -15,6 +15,7 @@ pytesseract
 python-docx
 fpdf2
 python-multipart
+openpyxl
 
 # Security & Utilities
 RestrictedPython
