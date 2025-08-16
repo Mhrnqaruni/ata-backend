@@ -62,6 +62,9 @@ class AssessmentRepositorySQL:
             result.status = status
             self.db.commit()
 
+    def get_all_results(self) -> List[Result]:
+        return self.db.query(Result).all()
+
     # ... other result update methods would follow the same pattern ...
 
     def get_assessments_as_dataframe(self, user_id: str) -> pd.DataFrame:

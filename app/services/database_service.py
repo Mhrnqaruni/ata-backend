@@ -104,6 +104,7 @@ class DatabaseService:
         self.assessment_repo.update_result_grade(job_id, student_id, question_id, grade, feedback, status)
     def get_student_by_student_id(self, student_id: str) -> Optional[Dict]: return self.class_student_repo.get_student_by_student_id(student_id)
     # ... other assessment methods can be added here if needed ...
+    def get_all_results(self) -> List[Dict]: return self.assessment_repo.get_all_results()
 
 
 # --- NEW DEPENDENCY PROVIDER ---
