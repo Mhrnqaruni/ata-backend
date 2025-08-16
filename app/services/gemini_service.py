@@ -125,3 +125,44 @@ async def ocr_file_with_gemini(file_bytes: bytes, mime_type: str) -> str:
     except Exception as e:
         print(f"ERROR in ocr_file_with_gemini with API: {e}")
         raise
+    
+
+
+
+
+
+async def generate_text_streaming(prompt: str, websocket: WebSocket) -> str:
+    """
+    Generates text, streams the response token-by-token over a WebSocket,
+    AND returns the final, complete string for persistence.
+    """
+    full_response = []
+    try:
+        model = genai.GenerativeModel(GEMINI_FLASH_MODEL)
+        stream = await model.generate_content_async(prompt, stream=True)
+        
+        is_stream_started = False
+        async for chunk in stream:
+            if chunk.text:
+                full_response.append(chunk.text)
+                if not is_stream_started:
+                    # Send a start message the moment the first token arrives
+                    await websocket.send_json({"type": "stream_start", "payload": {}})
+                    is_stream_started = True
+                await websocket.send_json({"type": "stream_token", "payload": {"token": chunk.text}})
+
+        if is_stream_started:
+            # Always send an end message if the stream was started
+            await websocket.send_json({"type": "stream_end", "payload": {}})
+
+    except Exception as e:
+        print(f"ERROR during streaming generation: {e}")
+        try:
+            await websocket.send_json({
+                "type": "error", 
+                "payload": {"message": "Sorry, an error occurred while generating the response."}
+            })
+        except Exception as ws_error:
+            print(f"Failed to send streaming error over WebSocket: {ws_error}")
+    
+    return "".join(full_response)
