@@ -1,4 +1,4 @@
-# /ata-backend/app/services/chatbot_service.py (FINAL, HARDENED SANDBOX VERSION)
+# /ata-backend/app/services/chatbot_service.py (FINAL, HARDENED, AND DEFINITIVELY CORRECTED)
 
 from typing import Dict, Optional, List
 from datetime import datetime
@@ -13,25 +13,29 @@ from . import gemini_service, prompt_library
 
 from RestrictedPython import compile_restricted, safe_globals
 
-# --- [THIS IS THE CORRECT PRINT COLLECTOR CLASS] ---
+# --- [THE FIX IS HERE: THE CORRECT PRINT COLLECTOR CLASS] ---
 class PrintCollector:
     """
     A safe, custom object that conforms to RestrictedPython's printing protocol.
-    It captures print output from sandboxed code into an internal list.
+    It is a callable object that also has the required _call_print method.
     """
     def __init__(self):
         self.captured_output = []
-    
-    # This is the specific method that RestrictedPython looks for and calls.
-    def _call_print(self, *args):
-        # Convert all arguments to strings and join them.
+
+    # This makes the INSTANCE of the class callable, e.g., print_collector("hello")
+    def __call__(self, *args):
         line = " ".join(map(str, args))
         self.captured_output.append(line)
+
+    # This is the specific method that RestrictedPython's rewritten code calls.
+    # We simply delegate it to our main __call__ method for consistency.
+    def _call_print(self, *args):
+        self.__call__(*args)
 
     def get_output(self) -> str:
         """Returns the full captured output as a single string."""
         return "\n".join(self.captured_output).strip()
-# --- [END OF CLASS DEFINITION] ---
+# --- [END OF FIX] ---
 
 
 def _generate_chat_name(first_message: str) -> str:
@@ -39,9 +43,7 @@ def _generate_chat_name(first_message: str) -> str:
 
 
 async def _generate_code_plan(user_id: str, query_text: str, db: DatabaseService) -> str:
-    """
-    Step 1 of the agentic loop: Generate a Python script based on a schema of lists of dictionaries.
-    """
+    """Step 1 of the agentic loop: Generate a Python script based on a schema of lists of dictionaries."""
     classes_list = db.get_classes_for_chatbot(user_id=user_id)
     students_list = db.get_students_for_chatbot(user_id=user_id)
     assessments_list = db.get_assessments_for_chatbot(user_id=user_id)
@@ -59,30 +61,21 @@ async def _generate_code_plan(user_id: str, query_text: str, db: DatabaseService
         raise ValueError(f"AI failed to generate a valid code plan. Error: {e}")
 
 async def _execute_code_in_sandbox(user_id: str, code_to_execute: str, db: DatabaseService) -> str:
-    """
-    Step 2 of the agentic loop: Securely execute the AI-generated code without pandas.
-    """
+    """Step 2 of the agentic loop: Securely execute the AI-generated code."""
     
     def sync_execute():
         classes_list = db.get_classes_for_chatbot(user_id=user_id)
         students_list = db.get_students_for_chatbot(user_id=user_id)
         assessments_list = db.get_assessments_for_chatbot(user_id=user_id)
 
-        # --- [THE FIX IS HERE - STEP 1: USE THE NEW PRINT COLLECTOR] ---
-        # Create an instance of our new, compliant PrintCollector class.
+        # This function now uses the corrected, callable PrintCollector class
         print_collector = PrintCollector()
-        # --- [END OF FIX] ---
 
         restricted_globals = safe_globals.copy()
         restricted_globals['classes'] = classes_list
         restricted_globals['students'] = students_list
         restricted_globals['assessments'] = assessments_list
-        
-        # --- [THE FIX IS HERE - STEP 2: INJECT THE OBJECT] ---
-        # The key MUST be '_print_', and the value is the INSTANCE of our collector class.
         restricted_globals['_print_'] = print_collector
-        # --- [END OF FIX] ---
-        
         restricted_globals['_getitem_'] = lambda obj, key: obj[key]
         
         modified_code = code_to_execute
@@ -90,11 +83,7 @@ async def _execute_code_in_sandbox(user_id: str, code_to_execute: str, db: Datab
         try:
             byte_code = compile_restricted(modified_code, '<string>', 'exec')
             exec(byte_code, restricted_globals, None)
-            
-            # --- [THE FIX IS HERE - STEP 3: GET THE OUTPUT FROM THE OBJECT] ---
             raw_result = print_collector.get_output()
-            # --- [END OF FIX] ---
-
         except Exception as e:
             print("--- FAILING AI-GENERATED CODE (Original) ---")
             print(code_to_execute)
@@ -116,29 +105,17 @@ async def _synthesize_natural_language_response(query_text: str, raw_result: str
 
 
 # --- Public Service Functions ---
-# This section is now fully correct and SQL-compatible.
-
 def start_new_chat_session(user_id: str, request: chatbot_model.NewChatSessionRequest, db: DatabaseService) -> Dict:
     """Creates a new chat session record in the database."""
     session_id = f"session_{uuid.uuid4().hex[:12]}"
     session_name = _generate_chat_name(request.first_message)
-    session_record = {
-        "id": session_id, 
-        "user_id": user_id, 
-        "name": session_name,
-    }
+    session_record = {"id": session_id, "user_id": user_id, "name": session_name}
     db.create_chat_session(session_record)
     return {"sessionId": session_id}
 
 async def add_new_message_to_session(session_id: str, user_id: str, message_text: str, file_id: Optional[str], db: DatabaseService, websocket: WebSocket):
     """Orchestrates the full agentic loop for a single user message."""
-    user_message_record = {
-        "id": f"msg_{uuid.uuid4().hex[:12]}", 
-        "session_id": session_id, 
-        "role": "user", 
-        "content": message_text, 
-        "file_id": file_id
-    }
+    user_message_record = {"id": f"msg_{uuid.uuid4().hex[:12]}", "session_id": session_id, "role": "user", "content": message_text, "file_id": file_id}
     db.add_chat_message(user_message_record)
     
     bot_response_text = ""
@@ -153,13 +130,7 @@ async def add_new_message_to_session(session_id: str, user_id: str, message_text
         bot_response_text = f"Agentic Loop Error: {e}"
         
     if bot_response_text:
-        bot_message_record = {
-            "id": f"msg_{uuid.uuid4().hex[:12]}", 
-            "session_id": session_id, 
-            "role": "bot", 
-            "content": bot_response_text, 
-            "file_id": None
-        }
+        bot_message_record = {"id": f"msg_{uuid.uuid4().hex[:12]}", "session_id": session_id, "role": "bot", "content": bot_response_text, "file_id": None}
         db.add_chat_message(bot_message_record)
 
 def delete_chat_session_logic(session_id: str, user_id: str, db: DatabaseService) -> bool:
@@ -168,7 +139,6 @@ def delete_chat_session_logic(session_id: str, user_id: str, db: DatabaseService
     if not session or session.user_id != user_id:
         return False
     return db.delete_chat_session(session_id)
-
 
 def get_chat_session_details_logic(session_id: str, user_id: str, db: DatabaseService) -> Optional[Dict]:
     """Business logic to get the full details of a chat session."""
