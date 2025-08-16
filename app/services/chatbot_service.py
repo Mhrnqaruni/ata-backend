@@ -1,4 +1,4 @@
-# /ata-backend/app/services/chatbot_service.py (REFACTORED FOR V1 CONVERSATIONAL AI)
+# /ata-backend/app/services/chatbot_service.py (FINAL, DEFINITIVE V1 CONVERSATIONAL)
 
 from typing import Dict, Optional, List
 from datetime import datetime
@@ -9,20 +9,17 @@ from .database_service import DatabaseService
 from ..models import chatbot_model
 from . import gemini_service, prompt_library
 
-# The complex sandbox (RestrictedPython) and its helpers are no longer needed.
-
 def _generate_chat_name(first_message: str) -> str:
     """Generates a short name for a new chat session from the first message."""
     return " ".join(first_message.split()[:5]) + ("..." if len(first_message.split()) > 5 else "")
 
-def _format_chat_history(messages: List[Dict]) -> str:
+def _format_chat_history(messages: List) -> str:
     """Formats the chat history into a simple, readable string for the AI prompt."""
     if not messages:
         return "No previous conversation history."
     
     formatted_history = []
     for msg in messages:
-        # Use attribute access since we get SQLAlchemy objects
         role = "Teacher" if msg.role == 'user' else "Assistant"
         formatted_history.append(f"{role}: {msg.content}")
     
@@ -32,21 +29,33 @@ def _format_chat_history(messages: List[Dict]) -> str:
 # --- Public Service Functions ---
 
 def start_new_chat_session(user_id: str, request: chatbot_model.NewChatSessionRequest, db: DatabaseService) -> Dict:
-    """Creates a new chat session record in the database."""
+    """
+    Creates a new chat session AND saves the user's first message.
+    This is an atomic operation.
+    """
     session_id = f"session_{uuid.uuid4().hex[:12]}"
     session_name = _generate_chat_name(request.first_message)
-    session_record = {
-        "id": session_id, 
-        "user_id": user_id, 
-        "name": session_name,
-    }
+    
+    # 1. Create the session record
+    session_record = { "id": session_id, "user_id": user_id, "name": session_name }
     db.create_chat_session(session_record)
+    
+    # 2. Create and save the user's first message record
+    user_message_record = {
+        "id": f"msg_{uuid.uuid4().hex[:12]}", 
+        "session_id": session_id, 
+        "role": "user", 
+        "content": request.first_message, 
+        "file_id": request.file_id
+    }
+    db.add_chat_message(user_message_record)
+    
     return {"sessionId": session_id}
 
 async def add_new_message_to_session(session_id: str, user_id: str, message_text: str, file_id: Optional[str], db: DatabaseService, websocket: WebSocket):
     """
-    Handles a new user message by sending it to the conversational AI for a direct response.
-    This is the new, simplified V1 logic.
+    Handles a new user message (from the second message onwards) by sending it
+    to the conversational AI for a direct response.
     """
     # 1. Save the user's new message to the database
     user_message_record = {
@@ -60,16 +69,16 @@ async def add_new_message_to_session(session_id: str, user_id: str, message_text
     
     bot_response_text = ""
     try:
-        # 2. Retrieve the conversation history (including the message we just saved)
+        # 2. Retrieve the full conversation history
         full_history_objects = db.get_messages_by_session_id(session_id)
         
         # 3. Format the history for the prompt
         formatted_history = _format_chat_history(full_history_objects)
         
-        # 4. Create the final prompt using the new conversational prompt
+        # 4. Create the final prompt
         prompt = prompt_library.CONVERSATIONAL_CHATBOT_PROMPT.format(
             chat_history=formatted_history,
-            user_message=message_text
+            user_message=message_text # This is redundant but harmless
         )
         
         # 5. Call the Gemini service to get a streamed response
@@ -79,7 +88,7 @@ async def add_new_message_to_session(session_id: str, user_id: str, message_text
         print(f"Error in conversational loop for session {session_id}: {e}")
         error_message = "Sorry, I encountered an error and could not process your message."
         await websocket.send_json({"type": "error", "payload": {"message": error_message}})
-        bot_response_text = f"Conversational Loop Error: {e}" # Save error for debugging
+        bot_response_text = f"Conversational Loop Error: {e}"
         
     # 6. Save the bot's final response to the database
     if bot_response_text:
