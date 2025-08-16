@@ -13,15 +13,26 @@ from ..database_service import DatabaseService
 def get_validated_config_from_job(job_record: 'Assessment') -> Union[assessment_model.AssessmentConfig, assessment_model.AssessmentConfigV2]:
     """
     Tries to parse config as V2 first, falls back to V1 for backward compatibility.
-    This version works directly with the dictionary provided by SQLAlchemy.
+    This version is hardened to handle both dict and str config types.
     """
-    # The job_record.config is already a Python dictionary, not a JSON string.
-    # We must use `model_validate` which accepts a dictionary.
-    config_dict = job_record.config
+    # --- [THE FINAL FIX IS HERE] ---
+    config_data = job_record.config
+    
+    # If the data from the DB is a string (due to old, bad data), parse it first.
+    if isinstance(config_data, str):
+        try:
+            config_data = json.loads(config_data)
+        except json.JSONDecodeError:
+            # If it's a bad string, raise an error that the calling function can handle.
+            raise ValueError("Config is a malformed JSON string.")
+
+    # Now we are guaranteed to have a dictionary.
+    # We can proceed with the validation.
+    # --- [END OF FINAL FIX] ---
     try:
-        return assessment_model.AssessmentConfigV2.model_validate(config_dict)
+        return assessment_model.AssessmentConfigV2.model_validate(config_data)
     except Exception:
-        return assessment_model.AssessmentConfig.model_validate(config_dict)
+        return assessment_model.AssessmentConfig.model_validate(config_data)
 
 # --- [THIS FUNCTION IS NOW CORRECTED] ---
 def normalize_config_to_v2(job_record: 'Assessment') -> assessment_model.AssessmentConfigV2:
