@@ -1,4 +1,4 @@
-# /app/services/history_service.py (FINAL, CORRECTED, SQL-COMPATIBLE VERSION)
+# /app/services/history_service.py (FINAL, HARDENED, SQL-COMPATIBLE VERSION)
 
 import uuid
 import json
@@ -54,33 +54,22 @@ def save_generation(
         "id": f"gen_{uuid.uuid4().hex[:16]}",
         "title": title,
         "tool_id": tool_id,
-        # --- [THE FIX IS HERE] ---
-        # We now save the dictionary directly. SQLAlchemy's JSON type will handle serialization.
-        "settings_snapshot": settings,
-        # --- [END OF FIX] ---
+        "settings_snapshot": settings, # Pass the dictionary directly
         "generated_content": generated_content,
     }
     
-    # This returns the newly created SQLAlchemy Generation object
     new_generation_obj = db.add_generation_record(history_record_data)
     
-    # --- [THE SECOND FIX IS HERE] ---
     # Pydantic's `model_validate` with `from_attributes=True` will now work seamlessly
-    # because our `history_model.GenerationRecord` expects a datetime object and a dict,
-    # which is exactly what the SQLAlchemy object provides.
     return GenerationRecord.model_validate(new_generation_obj)
-    # --- [END OF FIX] ---
 
 
 def delete_generation(db: DatabaseService, generation_id: str) -> bool:
     """
     Deletes a generation record from the database by delegating to the database service.
     """
-    # --- [THE FIX IS HERE] ---
-    # This now correctly calls the method we added to the DatabaseService facade.
     was_deleted = db.delete_generation_record(generation_id)
     return was_deleted
-    # --- [END OF FIX] ---
 
 
 def get_history(
@@ -90,16 +79,29 @@ def get_history(
 ) -> HistoryResponse:
     """
     Retrieves the user's AI generation history from the database,
-    processes it, and performs filtering.
+    processes it, and performs filtering. This is the corrected,
+    SQL-compatible version for the "read" path.
     """
-    # This now returns a list of SQLAlchemy Generation objects
     all_history_objects = db.get_all_generations()
     
-    # --- [THE FIX IS HERE] ---
-    # The conversion from SQLAlchemy object to Pydantic model is now much simpler.
-    # Pydantic handles the type validation directly.
-    processed_records = [GenerationRecord.model_validate(obj) for obj in all_history_objects]
-    # --- [END OF FIX] ---
+    processed_records = []
+    for record_obj in all_history_objects:
+        try:
+            # --- [THE FIX IS HERE] ---
+            # Create the Pydantic model from the SQLAlchemy object first.
+            pydantic_record = GenerationRecord.model_validate(record_obj)
+            
+            # Now, explicitly check if the snapshot is a string and parse it.
+            # This makes the code robust to however the DB driver returns the JSON.
+            if isinstance(pydantic_record.settings_snapshot, str):
+                pydantic_record.settings_snapshot = json.loads(pydantic_record.settings_snapshot)
+            # --- [END OF FIX] ---
+            
+            processed_records.append(pydantic_record)
+
+        except Exception as e:
+            print(f"Skipping corrupted history record: {getattr(record_obj, 'id', 'N/A')}. Error: {e}")
+            continue
 
     # The rest of the filtering logic works perfectly on the list of Pydantic models.
     filtered_results = processed_records
@@ -112,8 +114,6 @@ def get_history(
             if search_lower in r.generated_content.lower() or search_lower in r.title.lower()
         ]
     
-    # The sorting also works perfectly on the Pydantic models.
-    # Note: The database query already sorts, but this is a safe fallback.
     filtered_results.sort(key=lambda r: r.created_at, reverse=True)
     
     return HistoryResponse(
