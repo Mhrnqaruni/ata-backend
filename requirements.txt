@@ -23,3 +23,10 @@ python-dotenv
 
 # Testing Framework
 pytest
+
+
+psycopg[binary]
+asyncpg
+
+alembic
+psycopg2
