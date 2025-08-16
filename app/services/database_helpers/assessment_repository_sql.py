@@ -103,3 +103,27 @@ class AssessmentRepositorySQL:
         # results and assessments and filter by the user's classes.
         query = self.db.query(Result)
         return pd.read_sql(query.statement, self.db.bind)
+    
+
+    def get_student_result_path(self, job_id: str, student_id: str) -> Optional[str]:
+        """
+        Retrieves the answer sheet path for a specific student in a specific job.
+        """
+        result = self.db.query(Result.answer_sheet_path).filter_by(
+            job_id=job_id, 
+            student_id=student_id
+        ).first()
+        return result[0] if result else None
+
+    def update_result_status(self, job_id: str, student_id: str, question_id: str, status: str):
+        """
+        Updates the status of a single result record.
+        """
+        result = self.db.query(Result).filter_by(
+            job_id=job_id, 
+            student_id=student_id, 
+            question_id=question_id
+        ).first()
+        if result:
+            result.status = status
+            self.db.commit()

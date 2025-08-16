@@ -109,6 +109,10 @@ class DatabaseService:
     # In /ata-backend/app/services/database_service.py
     def get_students_with_paths(self, job_id: str) -> List[Dict]:return self.assessment_repo.get_students_with_paths(job_id)
 
+    def get_student_result_path(self, job_id: str, student_id: str) -> Optional[str]: return self.assessment_repo.get_student_result_path(job_id, student_id)
+
+    def update_result_status(self, job_id: str, student_id: str, question_id: str, status: str): return self.assessment_repo.update_result_status(job_id, student_id, question_id, status)
+
 
 # --- NEW DEPENDENCY PROVIDER ---
 # This replaces the old get_db_service function.
