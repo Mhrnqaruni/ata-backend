@@ -13,12 +13,12 @@ def get_validated_config_from_job(job_record: 'Assessment') -> Union[assessment_
     """Tries to parse config as V2 first, falls back to V1 for backward compatibility."""
     # --- [THE FIX IS HERE] ---
     # The job_record is now a SQLAlchemy object. Its 'config' is a dictionary.
-    config_str = json.dumps(job_record.config)
+    config_dict = job_record.config
     # --- [END OF FIX] ---
     try:
-        return assessment_model.AssessmentConfigV2.model_validate_json(config_str)
+        return assessment_model.AssessmentConfigV2.model_validate_json(config_dict)
     except Exception:
-        return assessment_model.AssessmentConfig.model_validate_json(config_str)
+        return assessment_model.AssessmentConfig.model_validate_json(config_dict)
 
 def normalize_config_to_v2(job_record: 'Assessment') -> assessment_model.AssessmentConfigV2:
     """Takes a job record and ALWAYS returns an AssessmentConfigV2 model."""
