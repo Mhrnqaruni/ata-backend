@@ -50,10 +50,17 @@ def _create_initial_job_records(db: DatabaseService, job_id: str, config: assess
         for question in config.questions:
             result_id = f"res_{uuid.uuid4().hex[:16]}"; unique_token = f"tok_{uuid.uuid4().hex}"
             db.save_student_grade_result({
-                "id": result_id, "job_id": job_id, "student_id": student['id'],
-                "question_id": question.id, "grade": None, "feedback": None,
-                "extractedAnswer": None, "status": "pending_match",
-                "report_token": unique_token, "answer_sheet_path": "", "content_type": ""
+                "id": result_id, 
+                "job_id": job_id, 
+                "student_id": student.id,
+                "question_id": question.id, 
+                "grade": None, 
+                "feedback": None,
+                "extractedAnswer": None, 
+                "status": "pending_match",
+                "report_token": unique_token, 
+                "answer_sheet_path": "", 
+                "content_type": ""
             })
 
 # --- [THE FIX IS HERE: NEW V2 SPECIALIST FUNCTION] ---
@@ -77,9 +84,16 @@ def _create_initial_job_records_v2(db: DatabaseService, job_id: str, config: ass
                 result_id = f"res_{uuid.uuid4().hex[:16]}"
                 unique_token = f"tok_{uuid.uuid4().hex}"
                 db.save_student_grade_result({
-                    "id": result_id, "job_id": job_id, "student_id": student['id'],
-                    "question_id": question.id, "grade": None, "feedback": None,
-                    "extractedAnswer": None, "status": "pending_match",
-                    "report_token": unique_token, "answer_sheet_path": "", "content_type": ""
+                    "id": result_id, 
+                    "job_id": job_id, 
+                    "student_id": student.id, 
+                    "question_id": question.id, 
+                    "grade": None, 
+                    "feedback": None,
+                    "extractedAnswer": None, 
+                    "status": "pending_match",
+                    "report_token": unique_token, 
+                    "answer_sheet_path": "", 
+                    "content_type": ""
                 })
 # --- [END OF FIX] ---
