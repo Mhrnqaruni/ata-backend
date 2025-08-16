@@ -1,4 +1,4 @@
-# /app/services/class_helpers/roster_ingestion.py
+# /app/services/class_helpers/roster_ingestion.py (CORRECTED)
 
 import json
 import asyncio
@@ -19,10 +19,12 @@ async def create_class_from_upload(name: str, file: UploadFile, db: DatabaseServ
     Orchestrates the advanced AI pipeline for creating a class from a roster file.
     """
     initial_class_data = class_model.ClassCreate(name=name, description=f"Roster uploaded from {file.filename}")
-    new_class = crud.create_class(class_data=initial_class_data, db=db)
+    # crud.create_class now returns a SQLAlchemy Class object
+    new_class_object = crud.create_class(class_data=initial_class_data, db=db)
     
     students_to_create = []
     try:
+        # ... (The entire middle section of this function is correct and remains unchanged) ...
         file_bytes = await file.read()
         content_type = file.content_type
 
@@ -75,14 +77,23 @@ async def create_class_from_upload(name: str, file: UploadFile, db: DatabaseServ
                     student_data['studentId'] = 'N/A'
                 
                 validated_student = student_model.StudentCreate(**student_data)
-                crud.add_student_to_class(class_id=new_class['id'], student_data=validated_student, db=db)
+                crud.add_student_to_class(class_id=new_class_object.id, student_data=validated_student, db=db)
+
     except Exception as e:
-        print(f"ERROR processing upload for class {new_class['id']}: {e}")
+        print(f"ERROR processing upload for class {new_class_object.id}: {e}")
         # Transactional Rollback
-        db.delete_class(new_class['id'])
+        db.delete_class(new_class_object.id)
         raise ValueError(str(e))
     
+    # --- [THE FIX IS HERE] ---
+    # We now construct the response dictionary using attribute access on the SQLAlchemy object.
     return {
         "message": "Upload successful. Roster created.",
-        "class_info": { **new_class, "studentCount": len(students_to_create) }
+        "class_info": {
+            "id": new_class_object.id,
+            "name": new_class_object.name,
+            "description": new_class_object.description,
+            "studentCount": len(students_to_create)
+        }
     }
+    # --- [END OF FIX] ---

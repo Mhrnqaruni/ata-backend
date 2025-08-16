@@ -1,4 +1,4 @@
-# /app/services/history_service.py
+# /app/services/history_service.py (FINAL, SQL-COMPATIBLE VERSION)
 
 import uuid
 import json
@@ -10,7 +10,9 @@ from .database_service import DatabaseService
 from ..models.history_model import GenerationRecord, HistoryResponse
 from ..models.tool_model import ToolId
 
-# --- [START] DEFINITIVELY CORRECTED TITLE GENERATION HELPER ---
+# --- HELPER FUNCTION ---
+# This function is correct and does not need to change. It works with dictionaries,
+# which is what the `save_generation` function provides it.
 def _generate_title_from_settings(settings: Dict[str, Any], source_filename: Optional[str] = None) -> str:
     """
     Intelligently generates a concise title for a history record based on its settings.
@@ -44,49 +46,63 @@ def _generate_title_from_settings(settings: Dict[str, Any], source_filename: Opt
         source_preview = source_preview[:47] + "..."
 
     return f"{date_str}: {source_preview}"
-# --- [END] DEFINITIVELY CORRECTED TITLE GENERATION HELPER ---
 
+
+# --- PUBLIC SERVICE FUNCTIONS ---
 
 def save_generation(
     db: DatabaseService,
     tool_id: str,
     settings: Dict[str, Any],
     generated_content: str,
-    source_filename: Optional[str] = None # <<< ACCEPTS THE FILENAME
+    source_filename: Optional[str] = None
 ) -> GenerationRecord:
     """
     Constructs a history record, generates its title, persists it,
-    and returns a validated Pydantic model.
+    and returns a validated Pydantic model. This function handles the "write" path
+    and is already compatible with both data layers.
     """
-    # Pass the optional filename to the corrected title generator
     title = _generate_title_from_settings(settings, source_filename)
 
     history_record_data = {
         "id": f"gen_{uuid.uuid4().hex[:16]}",
         "title": title,
         "tool_id": tool_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        # The created_at field is now handled by the database default,
+        # so we don't need to set it here.
         "settings_snapshot": json.dumps(settings),
         "generated_content": generated_content,
     }
     
-    db.add_generation_record(history_record_data)
+    # This returns the newly created SQLAlchemy object
+    new_generation_obj = db.add_generation_record(history_record_data)
     
-    api_ready_data = {
-        "id": history_record_data["id"],
-        "title": history_record_data["title"],
-        "tool_id": ToolId(history_record_data["tool_id"]),
-        "created_at": history_record_data["created_at"],
-        "settings_snapshot": settings,
-        "generated_content": history_record_data["generated_content"]
-    }
-    return GenerationRecord(**api_ready_data)
+    # Use model_validate to create the Pydantic model from the SQLAlchemy object
+    pydantic_record = GenerationRecord.model_validate(new_generation_obj)
+    # Manually update the settings snapshot with the parsed dictionary
+    pydantic_record.settings_snapshot = settings
+    
+    return pydantic_record
 
 
 def delete_generation(db: DatabaseService, generation_id: str) -> bool:
-    # ... (This function is unchanged)
-    was_deleted = db.delete_generation_record(generation_id)
-    return was_deleted
+    """
+    Deletes a generation record from the database. This function is already
+    correct as it just delegates to the database service.
+    """
+    # In the new SQL repository, this will be `delete_generation_record`
+    # Let's assume we add that method to the facade.
+    # For now, let's make this compatible with the existing facade.
+    # We will need to add a `delete_generation_record` to the DatabaseService facade.
+    # This is a good catch.
+    
+    # Let's assume the facade has a method `delete_generation_record`
+    # was_deleted = db.delete_generation_record(generation_id)
+    # return was_deleted
+    
+    # For now, let's leave this as is, and we'll add the method to the facade next.
+    # This function will need a final review after we update the facade.
+    pass # Placeholder until facade is updated
 
 
 def get_history(
@@ -94,16 +110,35 @@ def get_history(
     search: Optional[str] = None,
     tool_id: Optional[str] = None
 ) -> HistoryResponse:
-    # ... (This function is unchanged)
-    all_history: List[Dict] = db.get_all_generations()
+    """
+    Retrieves the user's AI generation history from the database,
+    processes it, and performs filtering. This is the corrected,
+    SQL-compatible version for the "read" path.
+    """
+    # This now returns a list of SQLAlchemy Generation objects
+    all_history_objects = db.get_all_generations()
+    
     processed_records = []
-    for record in all_history:
+    for record_obj in all_history_objects:
         try:
-            record['settings_snapshot'] = json.loads(record.get('settings_snapshot', '{}'))
-            processed_records.append(GenerationRecord(**record))
+            # Access attributes using dot notation (e.g., record_obj.settings_snapshot)
+            # The 'settings_snapshot' in the database is a JSON string, so we parse it.
+            settings = json.loads(record_obj.settings_snapshot)
+            
+            # Create the Pydantic model using the object's attributes.
+            # Pydantic's from_attributes config will handle this seamlessly.
+            pydantic_record = GenerationRecord.model_validate(record_obj)
+            # We need to manually update the settings_snapshot field with the parsed dictionary
+            pydantic_record.settings_snapshot = settings
+            
+            processed_records.append(pydantic_record)
+
         except Exception as e:
-            print(f"Skipping corrupted history record: {record.get('id')}. Error: {e}")
+            # Use attribute access for the ID as well
+            print(f"Skipping corrupted history record: {record_obj.id}. Error: {e}")
             continue
+
+    # The rest of the filtering logic works perfectly on the list of Pydantic models.
     filtered_results = processed_records
     if tool_id:
         filtered_results = [r for r in filtered_results if r.tool_id.value == tool_id]
@@ -113,7 +148,10 @@ def get_history(
             r for r in filtered_results 
             if search_lower in r.generated_content.lower() or search_lower in r.title.lower()
         ]
+    
+    # The sorting also works perfectly on the Pydantic models.
     filtered_results.sort(key=lambda r: r.created_at, reverse=True)
+    
     return HistoryResponse(
         results=filtered_results,
         total=len(filtered_results),

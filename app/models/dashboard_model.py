@@ -1,8 +1,7 @@
-# /app/models/dashboard_model.py
+# /app/models/dashboard_model.py (CORRECTED TO MODERN PydANTIC V2 SYNTAX)
 
 # --- Core Imports ---
-# Import the necessary components from Pydantic for data modeling.
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # --- Model Definition ---
 
@@ -12,16 +11,25 @@ class DashboardSummary(BaseModel):
     This model specifies the exact shape of the data that will be sent to the
     Home Page to populate its "Quick Info Cards".
     """
+    # --- [THE FIX IS HERE] ---
+    # The example is now part of the model_config, which is the modern syntax.
+    # from_attributes is NOT needed here, as explained above.
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "classCount": 4,
+                "studentCount": 112
+            }
+        }
+    )
+    # --- [END OF FIX] ---
 
     classCount: int = Field(
-        ...,  # This field is required.
-        description="The total number of active classes for the user.",
-        # The 'example' is used by FastAPI to generate richer API documentation.
-        example=4
+        ...,
+        description="The total number of active classes for the user."
     )
     
     studentCount: int = Field(
-        ...,  # This field is required.
-        description="The total number of students enrolled across all of the user's classes.",
-        example=112
+        ...,
+        description="The total number of students enrolled across all of the user's classes."
     )

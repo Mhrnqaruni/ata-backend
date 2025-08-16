@@ -1,4 +1,4 @@
-# /ata-backend/app/services/database_service.py (FINAL MIGRATED VERSION)
+# /ata-backend/app/services/database_service.py (FINAL MIGRATED VERSION, WITH DELETE METHOD)
 
 import os
 from typing import List, Dict, Optional, Generator
@@ -38,12 +38,11 @@ class DatabaseService:
         if USE_POSTGRES:
             if not db_session:
                 raise ValueError("A database session is required when USE_POSTGRES is true.")
-            # --- [THE FIX IS HERE] Initialize ALL SQL Repositories ---
+            # --- Initialize ALL SQL Repositories ---
             self.class_student_repo = ClassStudentRepositorySQL(db_session)
             self.assessment_repo = AssessmentRepositorySQL(db_session)
             self.chat_repo = ChatRepositorySQL(db_session)
             self.generation_repo = GenerationRepositorySQL(db_session)
-            # --- [END OF FIX] ---
         else:
             # --- Initialize CSV Repositories (Fallback for local dev) ---
             self.class_student_repo = ClassStudentRepositoryCSV()
@@ -56,7 +55,6 @@ class DatabaseService:
             )
 
     # --- CLASS & STUDENT METHODS (DELEGATED) ---
-    # No changes needed here. They correctly delegate to the loaded repository.
     def get_all_classes(self) -> List[Dict]: return self.class_student_repo.get_all_classes()
     def get_class_by_id(self, class_id: str) -> Optional[Dict]: return self.class_student_repo.get_class_by_id(class_id)
     def add_class(self, class_record: Dict): return self.class_student_repo.add_class(class_record)
@@ -75,6 +73,11 @@ class DatabaseService:
     # --- GENERATION HISTORY METHODS (DELEGATED) ---
     def get_all_generations(self) -> List[Dict]: return self.generation_repo.get_all_generations()
     def add_generation_record(self, history_record: Dict): return self.generation_repo.add_generation_record(history_record)
+    
+    # --- [THIS IS THE NEWLY ADDED METHOD] ---
+    def delete_generation_record(self, generation_id: str) -> bool:
+        return self.generation_repo.delete_generation_record(generation_id)
+    # --- [END OF NEW METHOD] ---
     
     # --- CHAT HISTORY METHODS (DELEGATED) ---
     def create_chat_session(self, session_record: Dict): return self.chat_repo.create_session(session_record)
