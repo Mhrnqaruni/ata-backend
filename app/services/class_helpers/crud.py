@@ -5,15 +5,26 @@ from typing import List, Dict, Optional
 
 from ...models import class_model, student_model
 from ..database_service import DatabaseService
+from ...db.models.class_student_models import Class # Import the SQLAlchemy model
 
 # --- CLASS-RELATED CORE BUSINESS LOGIC (UNCHANGED) ---
 
-def create_class(class_data: class_model.ClassCreate, db: DatabaseService) -> Dict:
+def create_class(class_data: class_model.ClassCreate, db: DatabaseService) -> Class:
+    """
+    Creates a new class record in the database.
+    This corrected version returns the SQLAlchemy Class object.
+    """
     new_id = f"cls_{uuid.uuid4().hex[:12]}"
     new_class_record = class_data.model_dump()
     new_class_record['id'] = new_id
-    db.add_class(new_class_record)
-    return new_class_record
+    
+    # --- [THE FIX IS HERE] ---
+    # db.add_class now returns the newly created SQLAlchemy object.
+    # We capture and return this object instead of the old dictionary.
+    new_class_object = db.add_class(new_class_record)
+    return new_class_object
+    # --- [END OF FIX] ---
+
 
 def update_class(class_id: str, class_update: class_model.ClassCreate, db: DatabaseService) -> Optional[Dict]:
     update_data = class_update.model_dump(exclude_unset=True)

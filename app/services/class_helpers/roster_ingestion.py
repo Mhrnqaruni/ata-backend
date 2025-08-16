@@ -94,6 +94,6 @@ async def create_class_from_upload(name: str, file: UploadFile, db: DatabaseServ
             "name": new_class_object.name,
             "description": new_class_object.description,
             "studentCount": len(students_to_create)
-        }
     }
+}
     # --- [END OF FIX] ---
