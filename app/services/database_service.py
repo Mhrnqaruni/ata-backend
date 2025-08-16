@@ -102,6 +102,7 @@ class DatabaseService:
     def get_result_by_token(self, token: str) -> Optional[Dict]: return self.assessment_repo.get_result_by_token(token)
     def update_student_result_with_grade(self, job_id: str, student_id: str, question_id: str, grade: Optional[float], feedback: str, status: str):
         self.assessment_repo.update_result_grade(job_id, student_id, question_id, grade, feedback, status)
+    def get_student_by_student_id(self, student_id: str) -> Optional[Dict]: return self.class_student_repo.get_student_by_student_id(student_id)
     # ... other assessment methods can be added here if needed ...
 
 

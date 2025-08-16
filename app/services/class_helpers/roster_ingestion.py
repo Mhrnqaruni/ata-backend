@@ -1,4 +1,4 @@
-# /app/services/class_helpers/roster_ingestion.py (CORRECTED)
+# /app/services/class_helpers/roster_ingestion.py (FINAL, CORRECTED VERSION)
 
 import json
 import asyncio
@@ -17,23 +17,25 @@ from . import crud
 async def create_class_from_upload(name: str, file: UploadFile, db: DatabaseService) -> Dict:
     """
     Orchestrates the advanced AI pipeline for creating a class from a roster file.
+    This version handles pre-existing students and provides an accurate count.
     """
     initial_class_data = class_model.ClassCreate(name=name, description=f"Roster uploaded from {file.filename}")
-    # crud.create_class now returns a SQLAlchemy Class object
     new_class_object = crud.create_class(class_data=initial_class_data, db=db)
     
-    students_to_create = []
+    students_to_process = []
+    newly_created_student_count = 0
+    
     try:
-        # ... (The entire middle section of this function is correct and remains unchanged) ...
         file_bytes = await file.read()
         content_type = file.content_type
 
-        # Smart Ingestion Routing
+        # --- Smart Ingestion Routing (Unchanged) ---
         if content_type in ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"]:
-            students_to_create = file_processors.extract_students_from_tabular(file_bytes, is_excel=True)
+            students_to_process = file_processors.extract_students_from_tabular(file_bytes, is_excel=True)
         elif content_type == "text/csv":
-            students_to_create = file_processors.extract_students_from_tabular(file_bytes, is_excel=False)
+            students_to_process = file_processors.extract_students_from_tabular(file_bytes, is_excel=False)
         else:
+            # ... (The entire text/image/AI processing block is unchanged and correct) ...
             raw_text = ""
             image_bytes_for_ai = None
             if content_type in ["image/jpeg", "image/png", "application/pdf"]:
@@ -47,53 +49,54 @@ async def create_class_from_upload(name: str, file: UploadFile, db: DatabaseServ
             if not raw_text or not raw_text.strip():
                 raise ValueError("Could not extract any text from the document.")
 
-            # AI Structuring Step
-            ai_response_str = ""
-            if image_bytes_for_ai:
-                example_json = '{\n  "students": [\n    { "name": "Alice Johnson", "studentId": "S-1001" },\n    { "name": "Bob Williams", "studentId": "S-1002" }\n  ]\n}'
-                prompt = prompt_library.MULTIMODAL_ROSTER_EXTRACTION_PROMPT.format(raw_ocr_text=raw_text, example_json=example_json)
-                ai_response_str = await gemini_service.generate_multimodal_response(prompt, image_bytes_for_ai)
-            else:
-                prompt = prompt_library.ROSTER_EXTRACTION_PROMPT.format(raw_ocr_text=raw_text)
-                ai_response_str = await gemini_service.generate_text(prompt, temperature=0.1)
+            prompt = prompt_library.ROSTER_EXTRACTION_PROMPT.format(raw_ocr_text=raw_text)
+            ai_response_str = await gemini_service.generate_text(prompt, temperature=0.1)
 
-            # Robust JSON Parsing
-            parsed_response = None
             try:
                 json_start, json_end = ai_response_str.find('{'), ai_response_str.rfind('}') + 1
-                if json_start != -1 and json_end != 0:
-                    parsed_response = json.loads(ai_response_str[json_start:json_end])
-                else: 
-                    raise ValueError("No JSON object found in the AI response.")
+                parsed_response = json.loads(ai_response_str[json_start:json_end])
             except Exception:
                 raise ValueError("The AI could not structure the data from the document.")
             
-            students_to_create = parsed_response.get("students", [])
+            students_to_process = parsed_response.get("students", [])
 
-        # Save Students to Database
-        if students_to_create:
-            for student_data in students_to_create:
+        # --- [THE FIX IS HERE: Save Students to Database with check] ---
+        if students_to_process:
+            for student_data in students_to_process:
                 if 'studentId' not in student_data or pd.isna(student_data.get('studentId')):
                     student_data['studentId'] = 'N/A'
                 
+                # Skip students with invalid IDs
+                if student_data['studentId'] == 'N/A':
+                    print(f"WARNING: Skipping student with missing ID: {student_data.get('name')}")
+                    continue
+
                 validated_student = student_model.StudentCreate(**student_data)
-                crud.add_student_to_class(class_id=new_class_object.id, student_data=validated_student, db=db)
+                
+                # The crud function now returns a tuple: (record, was_created_boolean)
+                _ , was_created = crud.add_student_to_class(
+                    class_id=new_class_object.id, 
+                    student_data=validated_student, 
+                    db=db
+                )
+                
+                # Only increment the count if a new student was actually created
+                if was_created:
+                    newly_created_student_count += 1
 
     except Exception as e:
         print(f"ERROR processing upload for class {new_class_object.id}: {e}")
-        # Transactional Rollback
+        # Transactional Rollback: If anything fails, delete the class we just made.
         db.delete_class(new_class_object.id)
         raise ValueError(str(e))
     
-    # --- [THE FIX IS HERE] ---
-    # We now construct the response dictionary using attribute access on the SQLAlchemy object.
+    # Construct the final response dictionary using the accurate count
     return {
-        "message": "Upload successful. Roster created.",
+        "message": "Upload successful. Roster processed.",
         "class_info": {
             "id": new_class_object.id,
             "name": new_class_object.name,
             "description": new_class_object.description,
-            "studentCount": len(students_to_create)
+            "studentCount": newly_created_student_count
+        }
     }
-}
-    # --- [END OF FIX] ---

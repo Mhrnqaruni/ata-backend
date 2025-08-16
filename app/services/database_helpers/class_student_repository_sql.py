@@ -93,3 +93,8 @@ class ClassStudentRepositorySQL:
         # V2 TODO: Filter by user_id when added to the Student model
         query = self.db.query(Student)
         return pd.read_sql(query.statement, self.db.bind)
+    
+
+        # In class_student_repository_sql.py
+    def get_student_by_student_id(self, student_id: str) -> Optional[Student]:
+        return self.db.query(Student).filter(Student.studentId == student_id).first()

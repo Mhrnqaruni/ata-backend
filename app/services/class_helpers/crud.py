@@ -8,6 +8,11 @@ from ..database_service import DatabaseService
 from ...db.models.class_student_models import Class # Import the SQLAlchemy model
 
 # --- CLASS-RELATED CORE BUSINESS LOGIC (UNCHANGED) ---
+def get_student_by_student_id(student_id: str, db: DatabaseService) -> Optional[Dict]:
+    """Checks if a student exists based on their user-provided studentId."""
+    # This requires a new method in our repository and facade. We'll add it.
+    return db.get_student_by_student_id(student_id)
+
 
 def create_class(class_data: class_model.ClassCreate, db: DatabaseService) -> Class:
     """
@@ -45,19 +50,26 @@ def add_student_to_class(class_id: str, student_data: student_model.StudentCreat
     """Business logic to add a new student to a class."""
     if not db.get_class_by_id(class_id):
         raise ValueError(f"Class with ID {class_id} not found")
+
+    # --- [THE FIX IS HERE] ---
+    # Check if a student with this ID already exists anywhere in the system.
+    existing_student = get_student_by_student_id(student_data.studentId, db)
+    if existing_student:
+        # For V1, we will log a warning and skip this student.
+        # We return the existing student's data so the caller knows what happened.
+        print(f"WARNING: Student with ID {student_data.studentId} already exists. Skipping creation.")
+        return existing_student
+    # --- [END OF FIX] ---
+
     new_student_id = f"stu_{uuid.uuid4().hex[:12]}"
     new_student_record = student_data.model_dump()
     new_student_record['id'] = new_student_id
     new_student_record['class_id'] = class_id
     new_student_record['overallGrade'] = 0
-
-    # --- [THE DIAGNOSTIC STEP IS HERE] ---
-    # Add this print statement to see the exact record before it's saved.
-    print(f"DEBUG: Saving student record: {new_student_record}")
-    # --- [END OF DIAGNOSTIC STEP] ---
-
-    db.add_student(new_student_record)
-    return new_student_record
+    
+    new_student_object = db.add_student(new_student_record)
+    # Convert the SQLAlchemy object to a dictionary before returning
+    return {c.name: getattr(new_student_object, c.name) for c in new_student_object.__table__.columns}
 
 
 def update_student(student_id: str, student_update: student_model.StudentUpdate, db: DatabaseService) -> Optional[Dict]:
