@@ -1,8 +1,12 @@
-# /ata-backend/app/services/database_helpers/assessment_repository_sql.py
+# /ata-backend/app/services/database_helpers/assessment_repository_sql.py (FINAL, CORRECTED VERSION)
 
 from typing import List, Dict, Optional
 import pandas as pd
 from sqlalchemy.orm import Session
+# --- [THE FIX IS HERE] ---
+# Import the 'select' and 'distinct' constructs from SQLAlchemy Core
+from sqlalchemy import select, distinct
+# --- [END OF FIX] ---
 from app.db.models.assessment_models import Assessment, Result
 
 class AssessmentRepositorySQL:
@@ -14,6 +18,7 @@ class AssessmentRepositorySQL:
         new_job = Assessment(**record)
         self.db.add(new_job)
         self.db.commit()
+        self.db.refresh(new_job)
         return new_job
 
     def get_job(self, job_id: str) -> Optional[Assessment]:
@@ -47,9 +52,14 @@ class AssessmentRepositorySQL:
         new_result = Result(**record)
         self.db.add(new_result)
         self.db.commit()
+        self.db.refresh(new_result)
+        return new_result
 
     def get_all_results_for_job(self, job_id: str) -> List[Result]:
         return self.db.query(Result).filter(Result.job_id == job_id).all()
+
+    def get_all_results(self) -> List[Result]:
+        return self.db.query(Result).all()
 
     def get_result_by_token(self, token: str) -> Optional[Result]:
         return self.db.query(Result).filter(Result.report_token == token).first()
@@ -62,16 +72,10 @@ class AssessmentRepositorySQL:
             result.status = status
             self.db.commit()
 
-    def get_all_results(self) -> List[Result]:
-        return self.db.query(Result).all()
-    
-
-    # Ensure this method and its contents are correctly defined.
     def update_result_path(self, job_id: str, student_id: str, path: str, content_type: str):
         """
         Updates all result records for a given student in a job to link their answer sheet path.
         """
-        # This logic must be indented INSIDE the method.
         results_to_update = self.db.query(Result).filter_by(job_id=job_id, student_id=student_id).all()
         
         if results_to_update:
@@ -81,8 +85,21 @@ class AssessmentRepositorySQL:
                 result.status = 'matched'
             self.db.commit()
 
-    # ... other result update methods would follow the same pattern ...
+    def get_students_with_paths(self, job_id: str) -> List[Dict]:
+        """
+        Retrieves a unique list of students and their matched file paths for a given job.
+        Returns a list of dictionaries as the original CSV method did.
+        """
+        stmt = (
+            select(Result.student_id, Result.answer_sheet_path, Result.content_type)
+            .where(Result.job_id == job_id, Result.answer_sheet_path != None, Result.answer_sheet_path != '')
+            .distinct()
+        )
+        results = self.db.execute(stmt).mappings().all()
+        return [dict(row) for row in results]
 
     def get_assessments_as_dataframe(self, user_id: str) -> pd.DataFrame:
-        query = self.db.query(Result) # Simplified for V1 as per original logic
+        # V2 TODO: This is a simplified model. A real implementation would join
+        # results and assessments and filter by the user's classes.
+        query = self.db.query(Result)
         return pd.read_sql(query.statement, self.db.bind)

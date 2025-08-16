@@ -106,6 +106,8 @@ class DatabaseService:
     # ... other assessment methods can be added here if needed ...
     def get_all_results(self) -> List[Dict]: return self.assessment_repo.get_all_results()
     def update_student_result_path(self, job_id: str, student_id: str, path: str, content_type: str): return self.assessment_repo.update_result_path(job_id, student_id, path, content_type)
+    # In /ata-backend/app/services/database_service.py
+    def get_students_with_paths(self, job_id: str) -> List[Dict]:return self.assessment_repo.get_students_with_paths(job_id)
 
 
 # --- NEW DEPENDENCY PROVIDER ---
