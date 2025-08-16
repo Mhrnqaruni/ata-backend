@@ -112,7 +112,14 @@ class DatabaseService:
     def get_student_result_path(self, job_id: str, student_id: str) -> Optional[str]: return self.assessment_repo.get_student_result_path(job_id, student_id)
 
     def update_result_status(self, job_id: str, student_id: str, question_id: str, status: str): return self.assessment_repo.update_result_status(job_id, student_id, question_id, status)
+    def get_classes_for_chatbot(self, user_id: str) -> List[Dict]:
+        return self.class_student_repo.get_classes_for_chatbot(user_id=user_id)
 
+    def get_students_for_chatbot(self, user_id: str) -> List[Dict]:
+        return self.class_student_repo.get_students_for_chatbot(user_id=user_id)
+
+    def get_assessments_for_chatbot(self, user_id: str) -> List[Dict]:
+        return self.assessment_repo.get_assessments_for_chatbot(user_id=user_id)
 
 # --- NEW DEPENDENCY PROVIDER ---
 # This replaces the old get_db_service function.

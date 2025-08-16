@@ -3,17 +3,14 @@
 from typing import List, Dict, Optional
 import pandas as pd
 from sqlalchemy.orm import Session
-# --- [THE FIX IS HERE] ---
-# Import the 'select' and 'distinct' constructs from SQLAlchemy Core
 from sqlalchemy import select, distinct
-# --- [END OF FIX] ---
 from app.db.models.assessment_models import Assessment, Result
 
 class AssessmentRepositorySQL:
     def __init__(self, db_session: Session):
         self.db = db_session
 
-    # --- Assessment Job Methods ---
+    # --- Assessment Job Methods (Unchanged and Correct) ---
     def add_job(self, record: Dict):
         new_job = Assessment(**record)
         self.db.add(new_job)
@@ -47,7 +44,7 @@ class AssessmentRepositorySQL:
             return True
         return False
 
-    # --- Assessment Result Methods ---
+    # --- Assessment Result Methods (Unchanged and Correct) ---
     def add_result(self, record: Dict):
         new_result = Result(**record)
         self.db.add(new_result)
@@ -73,11 +70,7 @@ class AssessmentRepositorySQL:
             self.db.commit()
 
     def update_result_path(self, job_id: str, student_id: str, path: str, content_type: str):
-        """
-        Updates all result records for a given student in a job to link their answer sheet path.
-        """
         results_to_update = self.db.query(Result).filter_by(job_id=job_id, student_id=student_id).all()
-        
         if results_to_update:
             for result in results_to_update:
                 result.answer_sheet_path = path
@@ -86,10 +79,6 @@ class AssessmentRepositorySQL:
             self.db.commit()
 
     def get_students_with_paths(self, job_id: str) -> List[Dict]:
-        """
-        Retrieves a unique list of students and their matched file paths for a given job.
-        Returns a list of dictionaries as the original CSV method did.
-        """
         stmt = (
             select(Result.student_id, Result.answer_sheet_path, Result.content_type)
             .where(Result.job_id == job_id, Result.answer_sheet_path != None, Result.answer_sheet_path != '')
@@ -98,17 +87,7 @@ class AssessmentRepositorySQL:
         results = self.db.execute(stmt).mappings().all()
         return [dict(row) for row in results]
 
-    def get_assessments_as_dataframe(self, user_id: str) -> pd.DataFrame:
-        # V2 TODO: This is a simplified model. A real implementation would join
-        # results and assessments and filter by the user's classes.
-        query = self.db.query(Result)
-        return pd.read_sql(query.statement, self.db.bind)
-    
-
     def get_student_result_path(self, job_id: str, student_id: str) -> Optional[str]:
-        """
-        Retrieves the answer sheet path for a specific student in a specific job.
-        """
         result = self.db.query(Result.answer_sheet_path).filter_by(
             job_id=job_id, 
             student_id=student_id
@@ -116,9 +95,6 @@ class AssessmentRepositorySQL:
         return result[0] if result else None
 
     def update_result_status(self, job_id: str, student_id: str, question_id: str, status: str):
-        """
-        Updates the status of a single result record.
-        """
         result = self.db.query(Result).filter_by(
             job_id=job_id, 
             student_id=student_id, 
@@ -127,3 +103,15 @@ class AssessmentRepositorySQL:
         if result:
             result.status = status
             self.db.commit()
+
+    # --- [THE FIX IS HERE: METHOD RENAMED AND REIMPLEMENTED] ---
+    def get_assessments_for_chatbot(self, user_id: str) -> List[Dict]:
+        """
+        Returns a list of result dictionaries for the chatbot sandbox.
+        V2 TODO: This is a simplified model. A real implementation would join
+        results and assessments and filter by the user's classes.
+        """
+        all_results = self.db.query(Result).all()
+        # Convert the list of SQLAlchemy Result objects into a list of dictionaries
+        return [{c.name: getattr(obj, c.name) for c in obj.__table__.columns} for obj in all_results]
+    # --- [END OF FIX] ---

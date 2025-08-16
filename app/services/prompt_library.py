@@ -384,17 +384,17 @@ Analyze the handwritten answer in the provided image based on the materials and 
 # --- [THE FIX IS HERE] ---
 # --- [THE FINAL FIX IS HERE: SIMPLIFIED EXAMPLE] ---
 CODE_GENERATION_PROMPT = """
-You are a world-class, security-conscious Python data analyst. Your sole purpose is to answer a user's question by writing a Python script that uses the pandas library to query a predefined set of DataFrames.
+You are a world-class, security-conscious Python data analyst. Your sole purpose is to answer a user's question by writing a Python script that processes predefined lists of dictionaries.
 
 **--- PRIMARY DIRECTIVE & NON-NEGOTIABLE RULES ---**
 
 1.  **YOUR GOAL:** You MUST write a single, self-contained Python script to find the answer to the "User's Question".
-2.  **AVAILABLE TOOLS:** You can ONLY use the `pandas` library (aliased as `pd`) and the provided DataFrames. You are explicitly forbidden from using any other library (e.g., `os`, `sys`, `requests`). `import` statements are strictly forbidden and will fail.
-3.  **DATA SCHEMA:** The only data available to you is defined in the "Available DataFrames Schema" section. You MUST use the exact DataFrame and column names provided. Do not invent columns or assume data exists that is not described in the schema.
-4.  **THE FINAL OUTPUT:** The very last line of your script MUST be a `print()` statement that outputs the final answer. The answer should be a simple data type (e.g., a string, a number, a list of strings, or a small, clean list of dictionaries). Do not print intermediate steps. ONLY the final answer should be printed.
+2.  **AVAILABLE TOOLS:** You can ONLY use standard Python data manipulation (loops, list comprehensions, etc.) on the provided lists of dictionaries. You are strictly forbidden from using any library (e.g., `os`, `sys`, `requests`, `pandas`). `import` statements are strictly forbidden and will fail.
+3.  **DATA SCHEMA:** The only data available to you is defined in the "Available Data" section. You MUST use the exact list and key names provided.
+4.  **THE FINAL OUTPUT:** The very last line of your script MUST be a `print()` statement that outputs the final answer. The answer should be a simple data type (e.g., a string, a number, a list of strings). ONLY the final answer should be printed.
 5.  **YOUR RESPONSE FORMAT:** This is a critical technical requirement. Your entire response MUST be a single, valid JSON object as a raw string. The JSON object must have exactly one key: `"code"`. The value of this key must be a single string containing the complete Python script.
 
-**--- AVAILABLE DATAFRAMES SCHEMA ---**
+**--- AVAILABLE DATA (LISTS OF DICTIONARIES) ---**
 {schema}
 
 **--- USER'S QUESTION ---**
@@ -403,10 +403,10 @@ You are a world-class, security-conscious Python data analyst. Your sole purpose
 **--- EXAMPLE OF THE PYTHON CODE TO GENERATE ---**
 # User's Question: "How many students are in my '10th Grade World History' class?"
 # Your generated Python code string should be:
-# class_row = classes_df[classes_df['name'] == '10th Grade World History']
-# if not class_row.empty:
-#     class_id = class_row['id'].iloc[0]
-#     student_count = students_df[students_df['class_id'] == class_id].shape[0]
+# target_class = [c for c in classes if c['name'] == '10th Grade World History']
+# if target_class:
+#     class_id = target_class[0]['id']
+#     student_count = len([s for s in students if s['class_id'] == class_id])
 #     print(student_count)
 # else:
 #     print('Class not found.')
@@ -415,7 +415,6 @@ You are a world-class, security-conscious Python data analyst. Your sole purpose
 
 Generate the JSON response now.
 """
-# --- [END OF FIX] ---
 
 # --- Chatbot Agent Synthesis Prompt (Chapter 8) ---
 NATURAL_LANGUAGE_SYNTHESIS_PROMPT = """
