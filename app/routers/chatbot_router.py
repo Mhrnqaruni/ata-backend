@@ -1,15 +1,19 @@
-# /ata-backend/app/routers/chatbot_router.py
+# /ata-backend/app/routers/chatbot_router.py (FINAL, SQL-COMPATIBLE VERSION)
 
-# --- [THE FIX IS HERE: ADD 'Response' TO THE IMPORT] ---
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Response, status, HTTPException
-# --- [END OF FIX] ---
 from typing import List
 import json
 
-from ..services import chatbot_service, database_service
+# Import the service and the Pydantic models
+from ..services import chatbot_service
+from ..services.database_service import DatabaseService, get_db_service
 from ..models import chatbot_model
 
 router = APIRouter()
+
+# --- REST ENDPOINTS FOR SESSION MANAGEMENT ---
+# These endpoints are already correct and do not need changes, as they delegate
+# to the now-corrected chatbot_service.
 
 @router.get(
     "/sessions",
@@ -18,13 +22,11 @@ router = APIRouter()
     description="Retrieves a list of all past chat session summaries for the user."
 )
 def get_chat_sessions(
-    db: database_service.DatabaseService = Depends(database_service.get_db_service)
+    db: DatabaseService = Depends(get_db_service)
 ):
     user_id = "user_v1_demo" 
     return db.get_chat_sessions_by_user_id(user_id)
 
-
-# Add inside the chatbot_router.py file, after the GET /sessions endpoint
 
 @router.get(
     "/sessions/{session_id}",
@@ -34,18 +36,15 @@ def get_chat_sessions(
 )
 def get_chat_session_details(
     session_id: str,
-    db: database_service.DatabaseService = Depends(database_service.get_db_service)
+    db: DatabaseService = Depends(get_db_service)
 ):
-    user_id = "user_v1_demo" # In V2, this comes from an auth dependency.
-    
+    user_id = "user_v1_demo"
     details = chatbot_service.get_chat_session_details_logic(session_id, user_id, db)
-    
     if not details:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Chat session with ID {session_id} not found or user does not have permission.",
         )
-    
     return details
 
 
@@ -57,7 +56,7 @@ def get_chat_session_details(
 )
 def create_new_chat_session(
     request: chatbot_model.NewChatSessionRequest,
-    db: database_service.DatabaseService = Depends(database_service.get_db_service)
+    db: DatabaseService = Depends(get_db_service)
 ):
     user_id = "user_v1_demo"
     session_info = chatbot_service.start_new_chat_session(user_id, request, db)
@@ -71,32 +70,35 @@ def create_new_chat_session(
 )
 def delete_chat_session(
     session_id: str,
-    db: database_service.DatabaseService = Depends(database_service.get_db_service)
+    db: DatabaseService = Depends(get_db_service)
 ):
     user_id = "user_v1_demo"
-    
     was_deleted = chatbot_service.delete_chat_session_logic(session_id, user_id, db)
-    
     if not was_deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Chat session with ID {session_id} not found or user does not have permission.",
         )
-    
-    # This line will now work correctly because 'Response' has been imported.
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- REAL-TIME WEBSOCKET ENDPOINT ---
 
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
     session_id: str,
-    db: database_service.DatabaseService = Depends(database_service.get_db_service)
+    db: DatabaseService = Depends(get_db_service)
 ):
-    # ... (The WebSocket endpoint code remains unchanged and is correct) ...
     user_id = "user_v1_demo"
+    # session is now a SQLAlchemy ChatSession object
     session = db.get_chat_session_by_id(session_id)
     
-    if not session or session.get("user_id") != user_id:
+    # --- [THE FIX IS HERE] ---
+    # Use attribute access (session.user_id) for the authorization check
+    # instead of the old dictionary-style access (session.get("user_id")).
+    if not session or session.user_id != user_id:
+    # --- [END OF FIX] ---
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -132,6 +134,3 @@ async def websocket_endpoint(
             })
         except Exception:
             pass
-
-
-
