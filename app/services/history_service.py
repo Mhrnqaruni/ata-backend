@@ -1,4 +1,4 @@
-# /app/services/history_service.py (FINAL, SQL-COMPATIBLE VERSION)
+# /app/services/history_service.py (FINAL, CORRECTED, SQL-COMPATIBLE VERSION)
 
 import uuid
 import json
@@ -10,45 +10,32 @@ from .database_service import DatabaseService
 from ..models.history_model import GenerationRecord, HistoryResponse
 from ..models.tool_model import ToolId
 
-# --- HELPER FUNCTION ---
-# This function is correct and does not need to change. It works with dictionaries,
-# which is what the `save_generation` function provides it.
+# --- HELPER FUNCTION (Unchanged and Correct) ---
 def _generate_title_from_settings(settings: Dict[str, Any], source_filename: Optional[str] = None) -> str:
     """
     Intelligently generates a concise title for a history record based on its settings.
-    This version correctly handles all three source types in the correct order of priority.
     """
     now = datetime.now(timezone.utc)
     date_str = now.strftime("%Y-%m-%d")
-
-    source_preview = "Untitled Generation" # Default fallback
-
-    # Priority 1: Use the uploaded filename if it exists. This is the most specific source.
+    source_preview = "Untitled Generation"
     if source_filename:
         source_preview = source_filename
-    # Priority 2: If no file, use the book name from library paths.
     elif settings.get("selected_chapter_paths"):
         try:
-            # Assumes path like ../Books/Level/Year/Subject/Book Name/Chapter.txt
             book_name = settings["selected_chapter_paths"][0].split(os.path.sep)[-2]
             source_preview = book_name
         except IndexError:
             source_preview = "Library Selection"
-    # Priority 3: If no file or library, use a preview of the source text.
     elif settings.get("source_text"):
-        # Create a preview of the first 5 words
         source_preview = ' '.join(settings["source_text"].split()[:5])
         if len(settings["source_text"].split()) > 5:
             source_preview += "..."
-    
-    # Truncate long previews to keep titles clean and readable in the UI
     if len(source_preview) > 50:
         source_preview = source_preview[:47] + "..."
-
     return f"{date_str}: {source_preview}"
 
 
-# --- PUBLIC SERVICE FUNCTIONS ---
+# --- PUBLIC SERVICE FUNCTIONS (Corrected) ---
 
 def save_generation(
     db: DatabaseService,
@@ -59,8 +46,7 @@ def save_generation(
 ) -> GenerationRecord:
     """
     Constructs a history record, generates its title, persists it,
-    and returns a validated Pydantic model. This function handles the "write" path
-    and is already compatible with both data layers.
+    and returns a validated Pydantic model.
     """
     title = _generate_title_from_settings(settings, source_filename)
 
@@ -68,41 +54,33 @@ def save_generation(
         "id": f"gen_{uuid.uuid4().hex[:16]}",
         "title": title,
         "tool_id": tool_id,
-        # The created_at field is now handled by the database default,
-        # so we don't need to set it here.
-        "settings_snapshot": json.dumps(settings),
+        # --- [THE FIX IS HERE] ---
+        # We now save the dictionary directly. SQLAlchemy's JSON type will handle serialization.
+        "settings_snapshot": settings,
+        # --- [END OF FIX] ---
         "generated_content": generated_content,
     }
     
-    # This returns the newly created SQLAlchemy object
+    # This returns the newly created SQLAlchemy Generation object
     new_generation_obj = db.add_generation_record(history_record_data)
     
-    # Use model_validate to create the Pydantic model from the SQLAlchemy object
-    pydantic_record = GenerationRecord.model_validate(new_generation_obj)
-    # Manually update the settings snapshot with the parsed dictionary
-    pydantic_record.settings_snapshot = settings
-    
-    return pydantic_record
+    # --- [THE SECOND FIX IS HERE] ---
+    # Pydantic's `model_validate` with `from_attributes=True` will now work seamlessly
+    # because our `history_model.GenerationRecord` expects a datetime object and a dict,
+    # which is exactly what the SQLAlchemy object provides.
+    return GenerationRecord.model_validate(new_generation_obj)
+    # --- [END OF FIX] ---
 
 
 def delete_generation(db: DatabaseService, generation_id: str) -> bool:
     """
-    Deletes a generation record from the database. This function is already
-    correct as it just delegates to the database service.
+    Deletes a generation record from the database by delegating to the database service.
     """
-    # In the new SQL repository, this will be `delete_generation_record`
-    # Let's assume we add that method to the facade.
-    # For now, let's make this compatible with the existing facade.
-    # We will need to add a `delete_generation_record` to the DatabaseService facade.
-    # This is a good catch.
-    
-    # Let's assume the facade has a method `delete_generation_record`
-    # was_deleted = db.delete_generation_record(generation_id)
-    # return was_deleted
-    
-    # For now, let's leave this as is, and we'll add the method to the facade next.
-    # This function will need a final review after we update the facade.
-    pass # Placeholder until facade is updated
+    # --- [THE FIX IS HERE] ---
+    # This now correctly calls the method we added to the DatabaseService facade.
+    was_deleted = db.delete_generation_record(generation_id)
+    return was_deleted
+    # --- [END OF FIX] ---
 
 
 def get_history(
@@ -112,31 +90,16 @@ def get_history(
 ) -> HistoryResponse:
     """
     Retrieves the user's AI generation history from the database,
-    processes it, and performs filtering. This is the corrected,
-    SQL-compatible version for the "read" path.
+    processes it, and performs filtering.
     """
     # This now returns a list of SQLAlchemy Generation objects
     all_history_objects = db.get_all_generations()
     
-    processed_records = []
-    for record_obj in all_history_objects:
-        try:
-            # Access attributes using dot notation (e.g., record_obj.settings_snapshot)
-            # The 'settings_snapshot' in the database is a JSON string, so we parse it.
-            settings = json.loads(record_obj.settings_snapshot)
-            
-            # Create the Pydantic model using the object's attributes.
-            # Pydantic's from_attributes config will handle this seamlessly.
-            pydantic_record = GenerationRecord.model_validate(record_obj)
-            # We need to manually update the settings_snapshot field with the parsed dictionary
-            pydantic_record.settings_snapshot = settings
-            
-            processed_records.append(pydantic_record)
-
-        except Exception as e:
-            # Use attribute access for the ID as well
-            print(f"Skipping corrupted history record: {record_obj.id}. Error: {e}")
-            continue
+    # --- [THE FIX IS HERE] ---
+    # The conversion from SQLAlchemy object to Pydantic model is now much simpler.
+    # Pydantic handles the type validation directly.
+    processed_records = [GenerationRecord.model_validate(obj) for obj in all_history_objects]
+    # --- [END OF FIX] ---
 
     # The rest of the filtering logic works perfectly on the list of Pydantic models.
     filtered_results = processed_records
@@ -150,6 +113,7 @@ def get_history(
         ]
     
     # The sorting also works perfectly on the Pydantic models.
+    # Note: The database query already sorts, but this is a safe fallback.
     filtered_results.sort(key=lambda r: r.created_at, reverse=True)
     
     return HistoryResponse(
