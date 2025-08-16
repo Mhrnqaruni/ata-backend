@@ -64,6 +64,21 @@ class AssessmentRepositorySQL:
 
     def get_all_results(self) -> List[Result]:
         return self.db.query(Result).all()
+    
+
+    def update_result_path(self, job_id: str, student_id: str, path: str, content_type: str):
+        """
+        Updates all result records for a given student in a job to link their answer sheet path.
+        """
+    # Find all results for this student in this job
+    results_to_update = self.db.query(Result).filter_by(job_id=job_id, student_id=student_id).all()
+    
+    if results_to_update:
+        for result in results_to_update:
+            result.answer_sheet_path = path
+            result.content_type = content_type
+            result.status = 'matched'
+        self.db.commit()
 
     # ... other result update methods would follow the same pattern ...
 

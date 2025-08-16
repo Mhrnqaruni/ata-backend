@@ -105,6 +105,7 @@ class DatabaseService:
     def get_student_by_student_id(self, student_id: str) -> Optional[Dict]: return self.class_student_repo.get_student_by_student_id(student_id)
     # ... other assessment methods can be added here if needed ...
     def get_all_results(self) -> List[Dict]: return self.assessment_repo.get_all_results()
+    def update_student_result_path(self, job_id: str, student_id: str, path: str, content_type: str): return self.assessment_repo.update_result_path(job_id, student_id, path, content_type)
 
 
 # --- NEW DEPENDENCY PROVIDER ---
