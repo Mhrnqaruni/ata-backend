@@ -1,13 +1,23 @@
-# /ata-backend/alembic/env.py (CORRECTED AND FINAL VERSION)
+# /ata-backend/alembic/env.py (MODIFIED AND APPROVED)
 
 import os
 import sys
 from logging.config import fileConfig
 
+# --- [CRITICAL MODIFICATION FOR .env LOADING] ---
+# Import the load_dotenv function from the dotenv library.
+from dotenv import load_dotenv
+
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+
+# --- [CRITICAL MODIFICATION FOR .env LOADING] ---
+# Explicitly load the .env file from the project's root directory.
+# This ensures that the DATABASE_URL is available when Alembic runs.
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+
 
 # --- [CONFIGURATION - PART 1: MODEL PATH] ---
 # This is the first critical piece. We add our project's 'app' directory
@@ -27,6 +37,7 @@ config = context.config
 # --- [CONFIGURATION - PART 2: DATABASE URL] ---
 # This is the second critical piece. We get the DATABASE_URL from the
 # environment and inject it into the Alembic config.
+# This will now work because we loaded the .env file above.
 database_url = os.getenv("DATABASE_URL")
 if not database_url:
     raise ValueError("DATABASE_URL environment variable not set.")

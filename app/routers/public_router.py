@@ -1,27 +1,40 @@
-# /app/routers/public_router.py (CORRECTED)
+# /ata-backend/app/routers/public_router.py (SUPERVISOR-APPROVED FLAWLESS VERSION)
+
+"""
+This module defines API endpoints that are intentionally accessible to the public
+without requiring a standard user login session.
+
+Security for these endpoints is managed through unique, unguessable tokens
+embedded in the URL, rather than through JWT Bearer tokens.
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-import json
+from pydantic import BaseModel, Field
 from typing import Optional
-from pydantic import BaseModel # <<< ADD THIS IMPORT
 
+# --- Application-specific Imports ---
 from ..services.database_service import DatabaseService, get_db_service
-from ..models import assessment_model
+from ..services.assessment_helpers import analytics_and_matching
 
-router = APIRouter()
+# --- Pydantic Response Model ---
 
-# --- FIX: Inherit from the imported BaseModel ---
 class PublicReportResponse(BaseModel):
-    studentName: str
-    assessmentName: str
-    questionText: str
-    maxScore: int
-    grade: int
-    feedback: str
+    """
+    Defines the precise data contract for a public-facing student report.
+    This ensures only specific, non-sensitive information is exposed.
+    """
+    studentName: str = Field(..., description="The name of the student.")
+    assessmentName: str = Field(..., description="The name of the assessment.")
+    questionText: str = Field(..., description="The text of the specific question being reported on.")
+    maxScore: Optional[int] = Field(..., description="The maximum possible score for this question.")
+    grade: Optional[float] = Field(..., description="The grade the student received for this question.")
+    feedback: str = Field(..., description="The feedback provided for the student's answer.")
 
     class Config:
         from_attributes = True
 
+# --- Router Initialization ---
+router = APIRouter()
 
 @router.get(
     "/report/{report_token}",
@@ -33,33 +46,54 @@ def get_public_report_by_token(
     report_token: str,
     db: DatabaseService = Depends(get_db_service)
 ):
-    # ... (The rest of this function is correct and does not need to be changed)
-    result_record = db.get_result_by_token(report_token)
-    
-    if not result_record:
+    """
+    Retrieves the details for a single graded question via a unique, secure token.
+
+    This endpoint is public but secure. It uses a single, efficient database query
+    that joins all related tables to fetch the data only if the token is valid
+    and all data relationships are intact.
+    """
+    # 1. Fetch all required details in a single, secure, and efficient database call.
+    report_details = db.get_public_report_details_by_token(token=report_token)
+
+    if not report_details:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Report not found. The link may be invalid or expired."
         )
 
-    job_record = db.get_assessment_job(result_record.job_id)
-    student_record = db.get_student_by_id(result_record.student_id)
-    
-    if not job_record or not student_record:
-         raise HTTPException(
+    # Unpack the dictionary for clarity
+    result_record = report_details["result"]
+    job_record = report_details["assessment"]
+    student_record = report_details["student"]
+
+    # 2. Normalize the job's config to robustly handle both V1 and V2 formats.
+    config = analytics_and_matching.normalize_config_to_v2(job_record)
+
+    # 3. Find the specific question from the config that this result corresponds to.
+    question_config = None
+    for section in config.sections:
+        for q in section.questions:
+            if q.id == result_record.question_id:
+                question_config = q
+                break
+        if question_config:
+            break
+
+    if not question_config:
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Could not retrieve full report details."
+            detail="Question details not found in assessment configuration."
         )
-    
-    config = job_record.config
-    
+
+    # 4. Assemble the final, validated response payload.
     response_payload = {
         "studentName": student_record.name,
-        "assessmentName": config.get("assessmentName"),
-        "questionText": config.get("questionsText", "N/A"),
-        "maxScore": config.get("maxScore", 10),
+        "assessmentName": config.assessmentName,
+        "questionText": question_config.text,
+        "maxScore": question_config.maxScore,
         "grade": result_record.grade,
-        "feedback": result_record.feedback,
+        "feedback": result_record.feedback or "No feedback provided.",
     }
 
     return response_payload

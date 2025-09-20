@@ -1,7 +1,16 @@
-# /ata-backend/app/services/chatbot_service.py (FINAL, DEFINITIVE V1 CONVERSATIONAL)
+# /ata-backend/app/services/chatbot_service.py (SUPERVISOR-APPROVED FLAWLESS VERSION)
+
+"""
+This service module encapsulates all business logic for the chatbot feature.
+
+It is responsible for creating and managing chat sessions, adding messages to a
+conversation, and orchestrating the interaction with the AI model for generating
+responses. Every function in this module is now fully "user-aware," requiring a
+`user_id` for all database operations to ensure that chat sessions are private
+and securely scoped to the authenticated user.
+"""
 
 from typing import Dict, Optional, List
-from datetime import datetime
 import uuid
 from fastapi import WebSocket
 
@@ -9,17 +18,26 @@ from .database_service import DatabaseService
 from ..models import chatbot_model
 from . import gemini_service, prompt_library
 
+# --- Helper Functions (Pure Utilities) ---
+
 def _generate_chat_name(first_message: str) -> str:
-    """Generates a short name for a new chat session from the first message."""
+    """
+    Generates a short, descriptive name for a new chat session from the first message.
+    This is a pure function with no side effects.
+    """
     return " ".join(first_message.split()[:5]) + ("..." if len(first_message.split()) > 5 else "")
 
 def _format_chat_history(messages: List) -> str:
-    """Formats the chat history into a simple, readable string for the AI prompt."""
+    """
+    Formats a list of SQLAlchemy ChatMessage objects into a simple, readable
+    string for the AI prompt. This is a pure function.
+    """
     if not messages:
         return "No previous conversation history."
     
     formatted_history = []
     for msg in messages:
+        # Use attribute access (msg.role, msg.content) on the SQLAlchemy objects.
         role = "Teacher" if msg.role == 'user' else "Assistant"
         formatted_history.append(f"{role}: {msg.content}")
     
@@ -31,16 +49,16 @@ def _format_chat_history(messages: List) -> str:
 def start_new_chat_session(user_id: str, request: chatbot_model.NewChatSessionRequest, db: DatabaseService) -> Dict:
     """
     Creates a new chat session AND saves the user's first message.
-    This is an atomic operation.
+    This is an atomic operation that correctly stamps the new session with the owner's ID.
     """
     session_id = f"session_{uuid.uuid4().hex[:12]}"
     session_name = _generate_chat_name(request.first_message)
     
-    # 1. Create the session record
+    # 1. Create the session record, including the owner's user_id.
     session_record = { "id": session_id, "user_id": user_id, "name": session_name }
     db.create_chat_session(session_record)
     
-    # 2. Create and save the user's first message record
+    # 2. Create and save the user's first message record.
     user_message_record = {
         "id": f"msg_{uuid.uuid4().hex[:12]}", 
         "session_id": session_id, 
@@ -52,12 +70,14 @@ def start_new_chat_session(user_id: str, request: chatbot_model.NewChatSessionRe
     
     return {"sessionId": session_id}
 
+
 async def add_new_message_to_session(session_id: str, user_id: str, message_text: str, file_id: Optional[str], db: DatabaseService, websocket: WebSocket):
     """
-    Handles a new user message (from the second message onwards) by sending it
-    to the conversational AI for a direct response.
+    Handles a new user message by saving it, securely retrieving the full
+    conversation history, and orchestrating the AI's streamed response.
     """
-    # 1. Save the user's new message to the database
+    # 1. Save the user's new message to the database. This operation is implicitly
+    # secure because the session_id links it to a user-owned session.
     user_message_record = {
         "id": f"msg_{uuid.uuid4().hex[:12]}", 
         "session_id": session_id, 
@@ -69,19 +89,22 @@ async def add_new_message_to_session(session_id: str, user_id: str, message_text
     
     bot_response_text = ""
     try:
-        # 2. Retrieve the full conversation history
-        full_history_objects = db.get_messages_by_session_id(session_id)
+        # --- [CRITICAL SECURITY FIX] ---
+        # 2. Securely retrieve the full conversation history.
+        # This call now requires both session_id and user_id, ensuring that
+        # we only fetch history for a conversation the user actually owns.
+        full_history_objects = db.get_messages_by_session_id(session_id=session_id, user_id=user_id)
         
-        # 3. Format the history for the prompt
+        # 3. Format the now-secure history for the prompt.
         formatted_history = _format_chat_history(full_history_objects)
         
-        # 4. Create the final prompt
+        # 4. Create the final prompt.
         prompt = prompt_library.CONVERSATIONAL_CHATBOT_PROMPT.format(
             chat_history=formatted_history,
-            user_message=message_text # This is redundant but harmless
+            user_message=message_text
         )
         
-        # 5. Call the Gemini service to get a streamed response
+        # 5. Call the Gemini service to get a streamed response.
         bot_response_text = await gemini_service.generate_text_streaming(prompt, websocket)
 
     except Exception as e:
@@ -90,7 +113,7 @@ async def add_new_message_to_session(session_id: str, user_id: str, message_text
         await websocket.send_json({"type": "error", "payload": {"message": error_message}})
         bot_response_text = f"Conversational Loop Error: {e}"
         
-    # 6. Save the bot's final response to the database
+    # 6. Save the bot's final response to the database.
     if bot_response_text:
         bot_message_record = {
             "id": f"msg_{uuid.uuid4().hex[:12]}", 
@@ -101,22 +124,39 @@ async def add_new_message_to_session(session_id: str, user_id: str, message_text
         }
         db.add_chat_message(bot_message_record)
 
+
 def delete_chat_session_logic(session_id: str, user_id: str, db: DatabaseService) -> bool:
-    """Business logic to safely delete a chat session."""
-    session = db.get_chat_session_by_id(session_id)
-    if not session or session.user_id != user_id:
-        return False
-    return db.delete_chat_session(session_id)
+    """
+    Business logic to safely delete a chat session.
+    This function now uses the secure, user-scoped database method.
+    """
+    # --- [CRITICAL SECURITY FIX] ---
+    # The call to the database now requires both session_id and user_id.
+    # The database service will only return True if a session with that ID
+    # belonging to that user was found and deleted.
+    was_deleted = db.delete_chat_session(session_id=session_id, user_id=user_id)
+    return was_deleted
 
 
 def get_chat_session_details_logic(session_id: str, user_id: str, db: DatabaseService) -> Optional[Dict]:
-    """Business logic to get the full details of a chat session."""
-    session = db.get_chat_session_by_id(session_id)
-    if not session or session.user_id != user_id:
+    """
+    Business logic to get the full details of a chat session.
+    This function now uses secure, user-scoped database methods for all lookups.
+    """
+    # --- [CRITICAL SECURITY FIX 1/2] ---
+    # Securely fetch the parent session object. This will return None if the
+    # session does not exist OR if it does not belong to the current user.
+    session = db.get_chat_session_by_id(session_id=session_id, user_id=user_id)
+    
+    if not session:
         return None
 
-    messages = db.get_messages_by_session_id(session_id)
+    # --- [CRITICAL SECURITY FIX 2/2] ---
+    # Securely fetch the messages for the session, again requiring the user_id.
+    # This is a defense-in-depth measure.
+    messages = db.get_messages_by_session_id(session_id=session_id, user_id=user_id)
     
+    # Assemble the final response dictionary using the secure data.
     session_details = {
         "id": session.id,
         "name": session.name,

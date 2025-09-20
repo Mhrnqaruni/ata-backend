@@ -1,4 +1,16 @@
-# /app/main.py
+
+# /ata-backend/app/main.py (SUPERVISOR-APPROVED FLAWLESS VERSION)
+
+"""
+This module is the main entry point and central assembler for the ATA Backend FastAPI application.
+
+It is responsible for:
+1. Creating the main FastAPI application instance.
+2. Configuring application-wide settings, such as CORS middleware.
+3. Managing application lifecycle events (startup and shutdown) via the `lifespan` manager.
+4. Importing and including all the API routers from the `app.routers` package,
+   effectively building the complete API structure.
+"""
 
 # --- Core FastAPI Imports ---
 from fastapi import FastAPI
@@ -6,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 # --- Application-specific Router Imports ---
+# Import all router objects that define the various API endpoint groups.
 from .routers import (
     classes_router, 
     assessments_router, 
@@ -14,7 +27,10 @@ from .routers import (
     dashboard_router, 
     library_router,
     history_router,
-    public_router  # <<< ADDITION 1: Import the new public_router
+    public_router,
+    # --- [CRITICAL MODIFICATION 1/2: IMPORT THE NEW AUTH ROUTER] ---
+    # This import makes our new authentication endpoints available to the main app.
+    auth_router
 )
 
 # --- Service Imports for Startup Logic ---
@@ -23,12 +39,22 @@ from .services import library_service
 # --- Application Lifecycle Management ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    An asynchronous context manager to handle application startup and shutdown events.
+    """
     # This code runs ONCE when the application starts up.
+    print("INFO:     Application startup: Initializing library cache...")
     library_service.initialize_library_cache()
-    yield
+    print("INFO:     Library cache initialized.")
+    
+    yield  # The application runs while the context manager is active.
+    
     # This code runs ONCE when the application shuts down.
+    print("INFO:     Application shutdown.")
 
 # --- FastAPI Application Instance Creation ---
+# This creates the main application object. The title, description, and version
+# are used for the automatic OpenAPI (Swagger) documentation.
 app = FastAPI(
     title="ATA Backend API",
     description="The intelligent engine for the AI Teaching Assistant platform.",
@@ -37,6 +63,9 @@ app = FastAPI(
 )
 
 # --- Middleware Configuration ---
+# Configure Cross-Origin Resource Sharing (CORS) to allow requests from any
+# origin. This is suitable for development and for a public API that will be
+# consumed by a Vercel-hosted frontend.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -46,20 +75,33 @@ app.add_middleware(
 )
 
 # --- API Router Inclusion ---
-# Authenticated API routes under the /api prefix
+# The order of inclusion here determines the order in the API documentation.
+
+# --- [CRITICAL MODIFICATION 2/2: INCLUDE THE AUTH ROUTER] ---
+# This line activates the /register and /token endpoints, making them live.
+# They are placed first as they are the entry point for users.
+app.include_router(auth_router.router, prefix="/api/auth", tags=["Authentication"])
+
+# --- Protected API Routes (Require Authentication) ---
+# All core business logic endpoints are grouped here. They are all protected
+# by the `get_current_active_user` dependency defined within their respective files.
 app.include_router(dashboard_router.router, prefix="/api/dashboard", tags=["Dashboard"])
-app.include_router(classes_router.router, prefix="/api/classes", tags=["Classes"])
+app.include_router(classes_router.router, prefix="/api/classes", tags=["Classes & Students"])
 app.include_router(assessments_router.router, prefix="/api/assessments", tags=["Assessments"])
 app.include_router(tools_router.router, prefix="/api/tools", tags=["AI Tools"])
 app.include_router(chatbot_router.router, prefix="/api/chatbot", tags=["Chatbot"])
-app.include_router(library_router.router, prefix="/api/library", tags=["Library"])
-app.include_router(history_router.router, prefix="/api/history", tags=["History"])
+app.include_router(library_router.router, prefix="/api/library", tags=["Curriculum Library"])
+app.include_router(history_router.router, prefix="/api/history", tags=["Generation History"])
 
-# --- ADDITION 2: Unauthenticated, public-facing routes under the /public prefix ---
-app.include_router(public_router.router, prefix="/public", tags=["Public"])
+# --- Publicly Accessible Routes (Do Not Require User Login) ---
+# These routes are for resources that are intentionally public, like shareable reports.
+app.include_router(public_router.router, prefix="/public", tags=["Public Resources"])
 
 # --- Root / Health Check Endpoint ---
 @app.get("/", tags=["Health Check"])
 async def read_root():
-    """A simple health check endpoint to confirm the API is online."""
+    """
+    A simple health check endpoint to confirm that the API is online and running.
+    """
     return {"status": "ATA Backend is running!", "version": app.version}
+

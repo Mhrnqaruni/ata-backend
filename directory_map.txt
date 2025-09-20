@@ -1,0 +1,138 @@
+/ata-backend/.git/ (skipped)
+/ata-backend/.pytest_cache/ (skipped)
+/ata-backend/node_modules/ (skipped)
+/ata-backend/venv/ (skipped)
+/ata-backend/
+/ata-backend/.env
+.../ata-backend/.gitignore
+.../ata-backend/alembic.ini
+.../ata-backend/Database Schema for now.txt
+.../ata-backend/direcotory generator.py
+.../ata-backend/directory_map.txt
+.../ata-backend/Dockerfile
+.../ata-backend/package-lock.json
+.../ata-backend/package.json
+.../ata-backend/pyproject.toml
+.../ata-backend/requirements.txt
+/ata-backend/alembic/__pycache__/ (skipped)
+/ata-backend/alembic/
+/ata-backend/alembic/env.py
+.../alembic/README
+.../alembic/script.py.mako
+/ata-backend/alembic/versions/__pycache__/ (skipped)
+/ata-backend/alembic/versions/
+/ata-backend/alembic/versions/f8bb9a614c07_create_initial_database_schema.py
+/ata-backend/app/__pycache__/ (skipped)
+/ata-backend/app/
+/ata-backend/app/main.py
+.../app/__init__.py
+/ata-backend/app/data/
+/ata-backend/app/data/.gitkeep
+.../data/assessments.csv
+.../data/chat_messages.csv
+.../data/chat_sessions.csv
+.../data/classes.csv
+.../data/generations.csv
+.../data/results.csv
+.../data/students.csv
+/ata-backend/app/data/uploads/
+/ata-backend/app/db/__pycache__/ (skipped)
+/ata-backend/app/db/
+/ata-backend/app/db/base.py
+.../db/base_class.py
+.../db/database.py
+.../db/__init__.py
+/ata-backend/app/db/models/
+/ata-backend/app/db/models/assessment_models.py
+.../models/chat_models.py
+.../models/class_student_models.py
+.../models/generation_models.py
+.../models/__init__.py
+/ata-backend/app/models/__pycache__/ (skipped)
+/ata-backend/app/models/
+/ata-backend/app/models/assessment_model.py
+.../models/chatbot_model.py
+.../models/class_model.py
+.../models/dashboard_model.py
+.../models/history_model.py
+.../models/student_model.py
+.../models/tool_model.py
+.../models/__init__.py
+/ata-backend/app/routers/__pycache__/ (skipped)
+/ata-backend/app/routers/
+/ata-backend/app/routers/assessments_router.py
+.../routers/chatbot_router.py
+.../routers/classes_router.py
+.../routers/dashboard_router.py
+.../routers/history_router.py
+.../routers/library_router.py
+.../routers/public_router.py
+.../routers/tools_router.py
+.../routers/__init__.py
+/ata-backend/app/services/__pycache__/ (skipped)
+/ata-backend/app/services/
+/ata-backend/app/services/assessment_service.py
+.../services/chatbot_service.py
+.../services/class_service.py
+.../services/dashboard_service.py
+.../services/database_service.py
+.../services/gemini_service.py
+.../services/history_service.py
+.../services/library_service.py
+.../services/ocr_service - 2 (use Gemini 2.5 flash lite) but slow.py
+.../services/ocr_service.py
+.../services/pdf_service.py
+.../services/prompt_library.py
+.../services/report_service.py
+.../services/tool_service.py
+.../services/zip_service.py
+.../services/__init__.py
+/ata-backend/app/services/assessment_helpers/
+/ata-backend/app/services/assessment_helpers/analytics_and_matching.py
+.../assessment_helpers/data_assembly.py
+.../assessment_helpers/document_parser.py
+.../assessment_helpers/grading_pipeline.py
+.../assessment_helpers/job_creation.py
+.../assessment_helpers/__init__.py
+/ata-backend/app/services/class_helpers/
+/ata-backend/app/services/class_helpers/crud.py
+.../class_helpers/file_processors.py
+.../class_helpers/roster_ingestion.py
+.../class_helpers/__init__.py
+/ata-backend/app/services/database_helpers/
+/ata-backend/app/services/database_helpers/assessment_repository.py
+.../database_helpers/assessment_repository_sql.py
+.../database_helpers/base_repository.py
+.../database_helpers/chat_repository.py
+.../database_helpers/chat_repository_sql.py
+.../database_helpers/class_student_repository.py
+.../database_helpers/class_student_repository_sql.py
+.../database_helpers/generation_repository_sql.py
+.../database_helpers/__init__.py
+/ata-backend/ata_backend.egg-info/
+/ata-backend/ata_backend.egg-info/dependency_links.txt
+.../ata_backend.egg-info/PKG-INFO
+.../ata_backend.egg-info/SOURCES.txt
+.../ata_backend.egg-info/top_level.txt
+/ata-backend/Books/GCSE/ (skipped)
+/ata-backend/Books/Primary School/ (skipped)
+/ata-backend/Books/Sixth Form - College/ (skipped)
+/ata-backend/Books/
+/ata-backend/Books/direcotory generator.py
+.../Books/directory_map.txt
+/ata-backend/Books/Secondary School/
+/ata-backend/Books/Secondary School/Year 7 (Key Stage 3)/
+/ata-backend/Books/Secondary School/Year 8 (Key Stage 3)/
+/ata-backend/Books/Secondary School/Year 9 (Key Stage 3)/
+/ata-backend/tests/__pycache__/ (skipped)
+/ata-backend/tests/
+/ata-backend/tests/test_analytics_and_matching.py
+.../tests/test_assessment_models.py
+.../tests/test_assessment_service.py
+.../tests/test_database_service.py
+.../tests/test_data_assembly.py
+.../tests/test_document_parser.py
+.../tests/test_job_creation_helper.py
+.../tests/test_ocr(i added manually).py
+.../tests/test_ocr_performance.py
+.../tests/__init__.py

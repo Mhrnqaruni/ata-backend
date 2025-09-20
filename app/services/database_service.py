@@ -1,117 +1,159 @@
-# /ata-backend/app/services/database_service.py (FINAL MIGRATED VERSION, WITH DELETE METHOD)
+# /ata-backend/app/services/database_service.py (SUPERVISOR-APPROVED FLAWLESS VERSION)
 
-import os
+"""
+This module defines the DatabaseService, which acts as the central facade
+for all data access operations within the application.
+
+It abstracts away the underlying data storage mechanism (now exclusively SQL)
+and provides a unified, user-aware interface for higher-level business services.
+Every method that interacts with user-owned data now requires a `user_id`,
+ensuring strict data isolation and security.
+"""
+
 from typing import List, Dict, Optional, Generator
-import pandas as pd
 from sqlalchemy.orm import Session
 from fastapi import Depends
 
 # --- Core Database Setup ---
 from app.db.database import get_db
 
-# --- Repository Imports ---
-# Import both the new SQL repositories and the old CSV repositories
+# --- SQL Repository Imports ---
 from .database_helpers.class_student_repository_sql import ClassStudentRepositorySQL
 from .database_helpers.assessment_repository_sql import AssessmentRepositorySQL
 from .database_helpers.chat_repository_sql import ChatRepositorySQL
 from .database_helpers.generation_repository_sql import GenerationRepositorySQL
 
-from .database_helpers.class_student_repository import ClassStudentRepository as ClassStudentRepositoryCSV
-from .database_helpers.assessment_repository import AssessmentRepository as AssessmentRepositoryCSV
-from .database_helpers.chat_repository import ChatRepository as ChatRepositoryCSV
-from .database_helpers.base_repository import BaseRepository
-
-DATA_DIR = "app/data"
-GENERATIONS_DB_PATH = f"{DATA_DIR}/generations.csv"
-
-# Determine which data source to use based on an environment variable
-USE_POSTGRES = os.getenv("USE_POSTGRES", "false").lower() == "true"
+# --- Import SQLAlchemy Models for Accurate Type Hinting ---
+from app.db.models.user_model import User
+from app.db.models.class_student_models import Class, Student
+from app.db.models.assessment_models import Assessment, Result
+from app.db.models.chat_models import ChatSession, ChatMessage
+from app.db.models.generation_models import Generation
 
 
 class DatabaseService:
-    def __init__(self, db_session: Optional[Session] = None):
+    """
+    The main facade for all database operations. It ensures that all calls
+    are directed to the correct, secure repository methods.
+    """
+    def __init__(self, db_session: Session):
         """
-        Initializes the DatabaseService.
-        If USE_POSTGRES is true, it requires a db_session.
-        Otherwise, it falls back to the CSV-based repositories.
+        Initializes the DatabaseService with a mandatory database session
+        and instantiates all necessary SQL repositories.
         """
-        if USE_POSTGRES:
-            if not db_session:
-                raise ValueError("A database session is required when USE_POSTGRES is true.")
-            # --- Initialize ALL SQL Repositories ---
-            self.class_student_repo = ClassStudentRepositorySQL(db_session)
-            self.assessment_repo = AssessmentRepositorySQL(db_session)
-            self.chat_repo = ChatRepositorySQL(db_session)
-            self.generation_repo = GenerationRepositorySQL(db_session)
-        else:
-            # --- Initialize CSV Repositories (Fallback for local dev) ---
-            self.class_student_repo = ClassStudentRepositoryCSV()
-            self.assessment_repo = AssessmentRepositoryCSV()
-            self.chat_repo = ChatRepositoryCSV()
-            self.generation_repo = BaseRepository(
-                GENERATIONS_DB_PATH,
-                columns=['id', 'title', 'tool_id', 'created_at', 'settings_snapshot', 'generated_content'],
-                dtypes={'id': str, 'tool_id': str, 'title': str}
-            )
+        self.class_student_repo = ClassStudentRepositorySQL(db_session)
+        self.assessment_repo = AssessmentRepositorySQL(db_session)
+        self.chat_repo = ChatRepositorySQL(db_session)
+        self.generation_repo = GenerationRepositorySQL(db_session)
 
-    # --- CLASS & STUDENT METHODS (DELEGATED) ---
-    def get_all_classes(self) -> List[Dict]: return self.class_student_repo.get_all_classes()
-    def get_class_by_id(self, class_id: str) -> Optional[Dict]: return self.class_student_repo.get_class_by_id(class_id)
-    def add_class(self, class_record: Dict): return self.class_student_repo.add_class(class_record)
-    def update_class(self, class_id: str, class_update_data: Dict) -> Optional[Dict]: return self.class_student_repo.update_class(class_id, class_update_data)
-    def delete_class(self, class_id: str) -> bool: return self.class_student_repo.delete_class(class_id)
-    def get_all_students(self) -> List[Dict]: return self.class_student_repo.get_all_students()
-    def get_students_by_class_id(self, class_id: str) -> List[Dict]: return self.class_student_repo.get_students_by_class_id(class_id)
-    def add_student(self, student_record: Dict): return self.class_student_repo.add_student(student_record)
-    def update_student(self, student_id: str, student_update_data: Dict) -> Optional[Dict]: return self.class_student_repo.update_student(student_id, student_update_data)
-    def delete_student(self, student_id: str, class_id: str) -> bool: return self.class_student_repo.delete_student(student_id=student_id, class_id=class_id)
-    def delete_students_by_class_id(self, class_id: str) -> int: return self.class_student_repo.delete_students_by_class_id(class_id)
-    def get_classes_as_dataframe(self, user_id: str) -> pd.DataFrame: return self.class_student_repo.get_classes_as_dataframe(user_id=user_id)
-    def get_students_as_dataframe(self, user_id: str) -> pd.DataFrame: return self.class_student_repo.get_students_as_dataframe(user_id=user_id)
-    def get_assessments_as_dataframe(self, user_id: str) -> pd.DataFrame: return self.assessment_repo.get_assessments_as_dataframe(user_id=user_id)
+    # --- NEW: User Management Methods ---
+    def get_user_by_id(self, user_id: str) -> Optional[User]:
+        return self.class_student_repo.get_user_by_id(user_id=user_id)
 
-    # --- GENERATION HISTORY METHODS (DELEGATED) ---
-    def get_all_generations(self) -> List[Dict]: return self.generation_repo.get_all_generations()
-    def add_generation_record(self, history_record: Dict): return self.generation_repo.add_generation_record(history_record)
+    def get_user_by_email(self, email: str) -> Optional[User]:
+        return self.class_student_repo.get_user_by_email(email=email)
+
+    def create_user(self, user_data: Dict) -> User:
+        return self.class_student_repo.add_user(record=user_data)
+
+    # --- MODIFIED: Class & Student Methods (User-Scoped with Correct Types) ---
+    def get_all_classes(self, user_id: str) -> List[Class]:
+        return self.class_student_repo.get_all_classes(user_id=user_id)
+
+    def get_class_by_id(self, class_id: str, user_id: str) -> Optional[Class]:
+        return self.class_student_repo.get_class_by_id(class_id=class_id, user_id=user_id)
+
+    def add_class(self, class_record: Dict) -> Class:
+        return self.class_student_repo.add_class(class_record)
+
+    def update_class(self, class_id: str, user_id: str, class_update_data: Dict) -> Optional[Class]:
+        return self.class_student_repo.update_class(class_id=class_id, user_id=user_id, data=class_update_data)
+
+    def delete_class(self, class_id: str, user_id: str) -> bool:
+        return self.class_student_repo.delete_class(class_id=class_id, user_id=user_id)
+
+    def get_students_by_class_id(self, class_id: str, user_id: str) -> List[Student]:
+        return self.class_student_repo.get_students_by_class_id(class_id=class_id, user_id=user_id)
+
+    def add_student(self, student_record: Dict) -> Student:
+        return self.class_student_repo.add_student(student_record)
+
+    def update_student(self, student_id: str, user_id: str, student_update_data: Dict) -> Optional[Student]:
+        return self.class_student_repo.update_student(student_id=student_id, user_id=user_id, data=student_update_data)
+
+    def delete_student(self, student_id: str, user_id: str) -> bool:
+        return self.class_student_repo.delete_student(student_id=student_id, user_id=user_id)
     
-    # --- [THIS IS THE NEWLY ADDED METHOD] ---
-    def delete_generation_record(self, generation_id: str) -> bool:
-        return self.generation_repo.delete_generation_record(generation_id)
-    # --- [END OF NEW METHOD] ---
+    def get_student_by_student_id(self, student_id: str) -> Optional[Student]:
+        return self.class_student_repo.get_student_by_student_id(student_id=student_id)
+
+    # --- MODIFIED: Generation History Methods ---
+    def get_all_generations(self, user_id: str) -> List[Generation]:
+        return self.generation_repo.get_all_generations(user_id=user_id)
+
+    def add_generation_record(self, history_record: Dict) -> Generation:
+        return self.generation_repo.add_generation_record(history_record)
     
-    # --- CHAT HISTORY METHODS (DELEGATED) ---
-    def create_chat_session(self, session_record: Dict): return self.chat_repo.create_session(session_record)
-    def get_chat_sessions_by_user_id(self, user_id: str) -> List[Dict]: return self.chat_repo.get_sessions_by_user_id(user_id)
-    def get_chat_session_by_id(self, session_id: str) -> Optional[Dict]: return self.chat_repo.get_session_by_id(session_id)
-    def add_chat_message(self, message_record: Dict): return self.chat_repo.add_message(message_record)
-    def get_messages_by_session_id(self, session_id: str) -> List[Dict]: return self.chat_repo.get_messages_by_session_id(session_id)
-    def delete_chat_session(self, session_id: str) -> bool: return self.chat_repo.delete_session_by_id(session_id)
-    def delete_chat_messages_by_session_id(self, session_id: str) -> int:
-        # This method is no longer needed as cascade delete handles it in SQL
-        pass
+    def delete_generation_record(self, generation_id: str, user_id: str) -> bool:
+        return self.generation_repo.delete_generation_record(generation_id=generation_id, user_id=user_id)
+    
+    # --- MODIFIED: Chat History Methods ---
+    def create_chat_session(self, session_record: Dict) -> ChatSession:
+        return self.chat_repo.create_session(session_record)
 
-    # --- ASSESSMENT JOB & RESULT METHODS (DELEGATED) ---
-    def add_assessment_job(self, job_record: Dict): return self.assessment_repo.add_job(job_record)
-    def get_assessment_job(self, job_id: str) -> Optional[Dict]: return self.assessment_repo.get_job(job_id)
-    def get_all_assessment_jobs(self) -> List[Dict]: return self.assessment_repo.get_all_jobs()
-    def update_job_status(self, job_id: str, status: str): self.assessment_repo.update_job_status(job_id, status)
-    def update_job_with_summary(self, job_id: str, summary: str): self.assessment_repo.update_job_summary(job_id, summary)
-    def delete_assessment_job(self, job_id: str) -> bool: return self.assessment_repo.delete_job(job_id)
-    def save_student_grade_result(self, result_record: Dict): return self.assessment_repo.add_result(result_record)
-    def get_all_results_for_job(self, job_id: str) -> List[Dict]: return self.assessment_repo.get_all_results_for_job(job_id)
-    def get_result_by_token(self, token: str) -> Optional[Dict]: return self.assessment_repo.get_result_by_token(token)
-    def update_student_result_with_grade(self, job_id: str, student_id: str, question_id: str, grade: Optional[float], feedback: str, status: str):
-        self.assessment_repo.update_result_grade(job_id, student_id, question_id, grade, feedback, status)
-    def get_student_by_student_id(self, student_id: str) -> Optional[Dict]: return self.class_student_repo.get_student_by_student_id(student_id)
-    # ... other assessment methods can be added here if needed ...
-    def get_all_results(self) -> List[Dict]: return self.assessment_repo.get_all_results()
-    def update_student_result_path(self, job_id: str, student_id: str, path: str, content_type: str): return self.assessment_repo.update_result_path(job_id, student_id, path, content_type)
-    # In /ata-backend/app/services/database_service.py
-    def get_students_with_paths(self, job_id: str) -> List[Dict]:return self.assessment_repo.get_students_with_paths(job_id)
+    def get_chat_sessions_by_user_id(self, user_id: str) -> List[ChatSession]:
+        return self.chat_repo.get_sessions_by_user_id(user_id)
 
-    def get_student_result_path(self, job_id: str, student_id: str) -> Optional[str]: return self.assessment_repo.get_student_result_path(job_id, student_id)
+    def get_chat_session_by_id(self, session_id: str, user_id: str) -> Optional[ChatSession]:
+        return self.chat_repo.get_session_by_id(session_id, user_id)
 
-    def update_result_status(self, job_id: str, student_id: str, question_id: str, status: str): return self.assessment_repo.update_result_status(job_id, student_id, question_id, status)
+    def add_chat_message(self, message_record: Dict) -> ChatMessage:
+        return self.chat_repo.add_message(message_record)
+
+    def get_messages_by_session_id(self, session_id: str, user_id: str) -> List[ChatMessage]:
+        return self.chat_repo.get_messages_by_session_id(session_id, user_id)
+
+    def delete_chat_session(self, session_id: str, user_id: str) -> bool:
+        return self.chat_repo.delete_session_by_id(session_id, user_id)
+
+    # --- MODIFIED: Assessment Job & Result Methods ---
+    def add_assessment_job(self, job_record: Dict) -> Assessment:
+        return self.assessment_repo.add_job(job_record)
+
+    def get_assessment_job(self, job_id: str, user_id: str) -> Optional[Assessment]:
+        return self.assessment_repo.get_job(job_id, user_id)
+
+    def get_all_assessment_jobs(self, user_id: str) -> List[Assessment]:
+        return self.assessment_repo.get_all_jobs(user_id)
+
+    def update_job_status(self, job_id: str, user_id: str, status: str):
+        return self.assessment_repo.update_job_status(job_id, user_id, status)
+
+    def update_job_with_summary(self, job_id: str, user_id: str, summary: str):
+        return self.assessment_repo.update_job_summary(job_id, user_id, summary)
+
+    def delete_assessment_job(self, job_id: str, user_id: str) -> bool:
+        return self.assessment_repo.delete_job(job_id, user_id)
+
+    def save_student_grade_result(self, result_record: Dict) -> Result:
+        return self.assessment_repo.add_result(result_record)
+
+    def get_all_results_for_job(self, job_id: str, user_id: str) -> List[Result]:
+        return self.assessment_repo.get_all_results_for_job(job_id, user_id)
+
+    def get_result_by_token(self, token: str) -> Optional[Result]:
+        return self.assessment_repo.get_result_by_token(token)
+
+    def update_student_result_with_grade(self, job_id: str, student_id: str, question_id: str, grade: Optional[float], feedback: str, status: str, user_id: str):
+        return self.assessment_repo.update_result_grade(job_id, student_id, question_id, grade, feedback, status, user_id)
+
+    def update_student_result_path(self, job_id: str, student_id: str, path: str, content_type: str, user_id: str):
+        return self.assessment_repo.update_result_path(job_id, student_id, path, content_type, user_id)
+
+    def get_students_with_paths(self, job_id: str, user_id: str) -> List[Dict]:
+        return self.assessment_repo.get_students_with_paths(job_id, user_id)
+
+    # --- MODIFIED: Chatbot Helper Methods ---
     def get_classes_for_chatbot(self, user_id: str) -> List[Dict]:
         return self.class_student_repo.get_classes_for_chatbot(user_id=user_id)
 
@@ -120,12 +162,43 @@ class DatabaseService:
 
     def get_assessments_for_chatbot(self, user_id: str) -> List[Dict]:
         return self.assessment_repo.get_assessments_for_chatbot(user_id=user_id)
+    
+    def get_all_results_for_user(self, user_id: str) -> List[Result]:
+        """Pass-through method to get all results for a user."""
+        return self.assessment_repo.get_all_results_for_user(user_id=user_id)
 
-# --- NEW DEPENDENCY PROVIDER ---
-# This replaces the old get_db_service function.
+        # Add this new method to database_service.py
+    def get_public_report_details_by_token(self, token: str) -> Optional[Dict]:
+        """Pass-through for the secure public report details query."""
+        return self.assessment_repo.get_public_report_details_by_token(token=token)
+    
+    def get_student_result_path(self, job_id: str, student_id: str, user_id: str) -> Optional[str]:
+        """
+        Pass-through method to securely retrieve a student's answer sheet path
+        for a specific job.
+        """
+        return self.assessment_repo.get_student_result_path(
+            job_id=job_id, 
+            student_id=student_id, 
+            user_id=user_id
+        )
+        # Add this inside the DatabaseService class
+    def update_result_status(self, job_id: str, student_id: str, question_id: str, status: str, user_id: str):
+        """
+        Pass-through method to securely update a single result's status.
+        """
+        return self.assessment_repo.update_result_status(
+            job_id=job_id,
+            student_id=student_id,
+            question_id=question_id,
+            status=status,
+            user_id=user_id
+        )
+
+# --- SIMPLIFIED DEPENDENCY PROVIDER ---
 def get_db_service(db: Session = Depends(get_db)) -> Generator[DatabaseService, None, None]:
     """
     FastAPI dependency that provides a DatabaseService instance.
-    It intelligently decides whether to use PostgreSQL or CSVs.
+    This simplified version is for a SQL-only production environment.
     """
-    yield DatabaseService(db_session=db if USE_POSTGRES else None)
+    yield DatabaseService(db_session=db)

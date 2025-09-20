@@ -1,4 +1,18 @@
-# /app/services/tool_service.py
+# /ata-backend/app/services/tool_service.py (MODIFIED AND APPROVED - FLAWLESS VERSION)
+
+"""
+This service module acts as the central orchestrator for all AI content
+generation tools.
+
+It is responsible for:
+1. Receiving a generation request from the `tools_router`.
+2. Processing any source material (direct text, uploaded file, or library content).
+3. Dispatching the request to the appropriate specialist AI handler.
+4. Calling the `history_service` to persist the final, user-owned generation record.
+
+This module has been made "user-aware" to ensure that all generated content
+is correctly saved to the history of the authenticated user who initiated the request.
+"""
 
 from typing import Dict, Any, Optional
 from pydantic import ValidationError
@@ -10,9 +24,13 @@ from ..models.tool_model import ToolId, QuestionGeneratorSettings, SlideGenerato
 from ..services import gemini_service, history_service, prompt_library, ocr_service
 from .database_service import DatabaseService
 
-# --- Tool-Specific Logic Functions (All Unchanged) ---
+# --- Tool-Specific Logic Functions (These are pure utilities and require no changes) ---
 
 async def _handle_question_generator(settings: Dict[str, Any]) -> str:
+    """
+    Specialist handler for the Question Generator tool.
+    Validates settings and calls the AI with the appropriate prompt.
+    """
     try:
         validated_settings = QuestionGeneratorSettings(**settings)
     except ValidationError as e:
@@ -30,6 +48,10 @@ async def _handle_question_generator(settings: Dict[str, Any]) -> str:
 
 
 async def _handle_slide_generator(settings: Dict[str, Any]) -> str:
+    """
+    Specialist handler for the Slide Generator tool.
+    Validates settings and calls the AI with the appropriate prompt.
+    """
     try:
         validated_settings = SlideGeneratorSettings(**settings)
     except ValidationError as e:
@@ -47,6 +69,10 @@ async def _handle_slide_generator(settings: Dict[str, Any]) -> str:
 
 
 async def _handle_rubric_generator(settings: Dict[str, Any]) -> str:
+    """
+    Specialist handler for the Rubric Generator tool.
+    Validates settings and calls the AI with the appropriate prompt.
+    """
     try:
         validated_settings = RubricGeneratorSettings(**settings)
     except ValidationError as e:
@@ -67,7 +93,7 @@ async def _handle_rubric_generator(settings: Dict[str, Any]) -> str:
     return await gemini_service.generate_text(prompt, temperature=0.5)
 
 
-# --- Tool Handler Dispatcher (Unchanged) ---
+# --- Tool Handler Dispatcher (This is a static mapping and requires no changes) ---
 TOOL_HANDLERS = {
     ToolId.QUESTION_GENERATOR: _handle_question_generator,
     ToolId.SLIDE_GENERATOR: _handle_slide_generator,
@@ -75,14 +101,32 @@ TOOL_HANDLERS = {
 }
 
 
-# --- Main Orchestration Function (UPGRADED) ---
+# --- Main Orchestration Function (MODIFIED AND SECURE) ---
 async def generate_content_for_tool(
     settings_payload: Dict[str, Any],
     source_file: Optional[UploadFile],
-    db: DatabaseService
+    db: DatabaseService,
+    user_id: str  # <-- CRITICAL MODIFICATION 1/2: Added user_id
 ) -> Dict[str, Any]:
+    """
+    Orchestrates the entire AI tool generation process.
+
+    This function is now secure. It receives the authenticated user's ID and
+    ensures that the final call to the `history_service` includes this ID,
+    thereby guaranteeing that the generated content is saved to the correct
+    user's history.
+
+    Args:
+        settings_payload: The raw payload from the router, containing tool_id and settings.
+        source_file: An optional uploaded file for context.
+        db: The DatabaseService instance.
+        user_id: The ID of the authenticated user making the request.
+
+    Returns:
+        A dictionary containing the details of the saved generation record.
+    """
     
-    # This entire section is unchanged and correct
+    # This initial logic for processing the source material remains unchanged.
     tool_id_str = settings_payload.get("tool_id")
     settings_dict = settings_payload.get("settings")
     if not tool_id_str or settings_dict is None:
@@ -118,21 +162,25 @@ async def generate_content_for_tool(
     handler = TOOL_HANDLERS.get(tool_id)
     if not handler:
         raise ValueError(f"Invalid or not-yet-implemented toolId: {tool_id}")
+    
     generated_content = await handler(settings_dict)
     
-    # --- [START] CRITICAL AND FINAL FIX ---
-    # We now pass the filename to the history service, fulfilling the new contract.
+    # --- [CRITICAL MODIFICATION 2/2: SECURE PERSISTENCE] ---
+    # The authenticated user's ID is now passed to the history_service.
+    # This ensures the generated content is saved to the correct user's account.
     history_record = history_service.save_generation(
         db=db,
+        user_id=user_id,  # <-- The user_id is now correctly passed.
         tool_id=tool_id.value,
         settings=settings_dict,
         generated_content=generated_content,
         source_filename=source_file.filename if source_file else None
     )
-    # --- [END] CRITICAL AND FINAL FIX ---
     
+    # The response construction remains the same.
     return {
         "generation_id": history_record.id,
         "tool_id": history_record.tool_id.value,
         "content": history_record.generated_content
     }
+

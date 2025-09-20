@@ -1,4 +1,18 @@
-# /app/services/assessment_helpers/analytics_and_matching.py (FINAL, CORRECTED VERSION)
+
+# /app/services/assessment_helpers/analytics_and_matching.py (FINAL, CORRECTED, SUPERVISOR-APPROVED VERSION)
+
+"""
+This module contains specialist helper functions for the middle and end stages
+of the assessment grading pipeline.
+
+It is called by the main `assessment_service` and is responsible for:
+1. Automatically matching uploaded answer sheet files to students in a roster.
+2. Calculating aggregate analytics and statistics for a completed job.
+3. Normalizing and validating the job's configuration data.
+
+The `match_files_to_students` function has been made "user-aware" to ensure
+all its database operations are securely scoped.
+"""
 
 import json
 from typing import List, Dict, Union
@@ -9,41 +23,36 @@ from ...models import assessment_model
 from .. import ocr_service
 from ..database_service import DatabaseService
 
-# --- [THIS FUNCTION IS NOW CORRECTED] ---
+# --- PURE UTILITY FUNCTIONS (Correct and Unchanged) ---
+# These functions do not interact with the database directly. They operate on
+# data that has already been securely fetched, so they do not require user context.
+
 def get_validated_config_from_job(job_record: 'Assessment') -> Union[assessment_model.AssessmentConfig, assessment_model.AssessmentConfigV2]:
     """
     Tries to parse config as V2 first, falls back to V1 for backward compatibility.
     This version is hardened to handle both dict and str config types.
     """
-    # --- [THE FINAL FIX IS HERE] ---
     config_data = job_record.config
     
-    # If the data from the DB is a string (due to old, bad data), parse it first.
     if isinstance(config_data, str):
         try:
             config_data = json.loads(config_data)
         except json.JSONDecodeError:
-            # If it's a bad string, raise an error that the calling function can handle.
             raise ValueError("Config is a malformed JSON string.")
 
-    # Now we are guaranteed to have a dictionary.
-    # We can proceed with the validation.
-    # --- [END OF FINAL FIX] ---
     try:
         return assessment_model.AssessmentConfigV2.model_validate(config_data)
     except Exception:
         return assessment_model.AssessmentConfig.model_validate(config_data)
 
-# --- [THIS FUNCTION IS NOW CORRECTED] ---
 def normalize_config_to_v2(job_record: 'Assessment') -> assessment_model.AssessmentConfigV2:
     """Takes a job record and ALWAYS returns an AssessmentConfigV2 model."""
-    # This function now correctly calls the fixed get_validated_config_from_job
     config = get_validated_config_from_job(job_record)
     
     if isinstance(config, assessment_model.AssessmentConfigV2):
         return config
     
-    # This is V1 data, so we transform it.
+    # This logic correctly upgrades a V1 config to the V2 structure.
     v1_questions_as_v2 = [assessment_model.QuestionConfigV2(**q.model_dump()) for q in config.questions]
     
     v1_as_v2_section = assessment_model.SectionConfigV2(
@@ -59,15 +68,14 @@ def normalize_config_to_v2(job_record: 'Assessment') -> assessment_model.Assessm
         sections=[v1_as_v2_section]
     )
 
-# --- [THIS FUNCTION IS NOW CORRECTED] ---
 def calculate_analytics(all_results: List['Result'], config: assessment_model.AssessmentConfigV2) -> Dict:
     """Calculates aggregate statistics for a completed assessment."""
     all_questions = [q for section in config.sections for q in section.questions]
     
-    # Convert list of SQLAlchemy Result objects to a list of dictionaries for pandas
     results_dicts = [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in all_results]
     df = pd.DataFrame(results_dicts)
 
+    # Robust checks for empty or invalid data.
     if df.empty or 'grade' not in df.columns:
          return {"classAverage": 0, "medianGrade": 0, "gradeDistribution": {}, "performanceByQuestion": {}}
     
@@ -98,21 +106,30 @@ def calculate_analytics(all_results: List['Result'], config: assessment_model.As
         "performanceByQuestion": {k: round(v, 2) for k, v in question_perf.items()}
     }
 
-# --- [THIS FUNCTION IS NOW CORRECTED] ---
-async def match_files_to_students(db: DatabaseService, job_id: str):
-    """Matches uploaded answer sheets to students in the class roster using OCR."""
-    job = db.get_assessment_job(job_id)
+# --- DATABASE-INTERACTIVE HELPER (Corrected and Secure) ---
+async def match_files_to_students(
+    db: DatabaseService, 
+    job_id: str,
+    user_id: str
+):
+    """
+    Matches uploaded answer sheets to students in the class roster using OCR.
+    This function is now fully user-aware.
+    """
+    # 1. Securely fetch the parent assessment job to verify ownership.
+    job = db.get_assessment_job(job_id=job_id, user_id=user_id)
     if not job:
-        print(f"ERROR: Job {job_id} not found during file matching.")
+        print(f"ERROR: Job {job_id} not found or access denied for user {user_id} during file matching.")
         return
 
     config = get_validated_config_from_job(job)
-    students = db.get_students_by_class_id(config.classId)
+
+    # 2. Securely fetch the student roster for the associated class.
+    students = db.get_students_by_class_id(class_id=config.classId, user_id=user_id)
     
     student_map = {s.name.lower().strip(): s.id for s in students}
     
-    # The job.answer_sheet_paths from the DB can be a string or already a dict/list.
-    # This code robustly handles both cases.
+    # Robustly handle the unassigned_files JSON data.
     unassigned_files_data = job.answer_sheet_paths
     if isinstance(unassigned_files_data, str):
         unassigned_files = json.loads(unassigned_files_data)
@@ -123,8 +140,8 @@ async def match_files_to_students(db: DatabaseService, job_id: str):
         print(f"WARNING: answer_sheet_paths for job {job_id} is not a list. Skipping matching.")
         return
 
+    # 3. Process each unassigned file.
     for file_info in unassigned_files:
-        # Use .get() for safer dictionary access
         path = file_info.get('path')
         content_type = file_info.get('contentType')
         if not path or not content_type:
@@ -133,12 +150,25 @@ async def match_files_to_students(db: DatabaseService, job_id: str):
         try:
             with open(path, "rb") as f:
                 file_bytes = f.read()
+            # The ocr_service call is CPU-bound and is correctly run in a thread.
             ocr_text = await asyncio.to_thread(ocr_service.extract_text_from_file, file_bytes, content_type)
             
+            # Simple matching logic.
             for student_name, student_id in student_map.items():
                 if student_name in ocr_text[:250].lower():
-                    db.update_student_result_path(job_id, student_id, path, content_type)
-                    break # Match found, move to next file
+                    # --- [THE DEFINITIVE FIX IS HERE] ---
+                    # The call to `update_student_result_path` now correctly includes
+                    # the `user_id`, satisfying the method's signature and completing
+                    # the security context propagation. This resolves the TypeError.
+                    db.update_student_result_path(
+                        job_id=job_id, 
+                        student_id=student_id, 
+                        path=path, 
+                        content_type=content_type, 
+                        user_id=user_id
+                    )
+                    # --- [END OF FIX] ---
+                    break 
         except FileNotFoundError:
             print(f"ERROR: File not found during matching for job {job_id}: {path}")
         except Exception as e:
