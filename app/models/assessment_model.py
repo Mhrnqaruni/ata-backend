@@ -18,6 +18,19 @@ class GradingMode(str, Enum):
     AI_AUTO_GRADE = "ai_auto_grade"
     LIBRARY = "library"
 
+class ResultStatus(str, Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"  
+    AI_GRADED = "ai_graded"
+    PENDING_REVIEW = "pending_review"
+    TEACHER_GRADED = "teacher_graded"
+    FAILED = "failed"
+
+class ConsensusType(str, Enum):
+    FULL = "full"         # All 3 AI models agree
+    MAJORITY = "majority" # 2 out of 3 AI models agree
+    NONE = "none"         # All 3 AI models disagree
+
 # --- API Contract Models ---
 
 class QuestionConfig(BaseModel):
@@ -78,6 +91,39 @@ class GradingResult(BaseModel):
     grade: Optional[float] = None; feedback: Optional[str] = None
     extractedAnswer: Optional[str] = None; status: str
 
+# New models for multi-AI grading support
+class AIModelResponse(BaseModel):
+    """Response from a single AI model for a single question."""
+    model_config = ConfigDict(from_attributes=True)
+    model_id: str  # Identifier for which AI model (e.g., "gemini_1", "gemini_2", "gemini_3")
+    grade: Optional[float] = None
+    feedback: Optional[str] = None
+    raw_response: Optional[str] = None  # Store the raw JSON response
+
+class MultiAIGradingResult(BaseModel):
+    """Extended grading result with multi-AI model responses and consensus data."""
+    model_config = ConfigDict(from_attributes=True)
+    grade: Optional[float] = None
+    feedback: Optional[str] = None
+    extractedAnswer: Optional[str] = None
+    status: ResultStatus
+    ai_responses: Optional[List[AIModelResponse]] = None
+    consensus_achieved: Optional[ConsensusType] = None
+    teacher_override: Optional[Dict] = None
+
+class TeacherOverride(BaseModel):
+    """Model for teacher manual grade/feedback override."""
+    model_config = ConfigDict(from_attributes=True)
+    grade: Optional[float] = None
+    feedback: Optional[str] = None
+    timestamp: Optional[str] = None
+    
+class PendingReviewRequest(BaseModel):
+    """Request model for teacher review of pending questions."""  
+    model_config = ConfigDict(from_attributes=True)
+    grade: float
+    feedback: str
+
 class Analytics(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     classAverage: float; medianGrade: float
@@ -91,6 +137,28 @@ class AssessmentResultsResponse(BaseModel):
     results: Dict[str, Dict[str, GradingResult]]
     analytics: Optional[Analytics] = None
     aiSummary: Optional[str] = None
+
+class CategorizedResultsResponse(BaseModel):
+    """Response model that separates AI-graded from pending review results."""
+    model_config = ConfigDict(from_attributes=True)
+    jobId: str
+    assessmentName: str
+    status: JobStatus
+    config: AssessmentConfigV2
+    ai_graded_students: List[Dict]  # Students with all questions AI-graded
+    pending_review_students: List[Dict]  # Students with questions needing manual review
+    analytics: Optional[Analytics] = None
+    aiSummary: Optional[str] = None
+
+class ReviewPageResponse(BaseModel):
+    """Response model for the teacher review page."""
+    model_config = ConfigDict(from_attributes=True)
+    jobId: str
+    assessmentName: str
+    student: Dict
+    questions: List[Dict]  # Question details with student answers and AI responses
+    pending_questions: List[Dict]  # Questions that need manual review (at top)
+    ai_graded_questions: List[Dict]  # Questions already graded by AI
 
 class AssessmentJobSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)

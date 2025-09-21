@@ -147,6 +147,14 @@ class DatabaseService:
     def update_student_result_with_grade(self, job_id: str, student_id: str, question_id: str, grade: Optional[float], feedback: str, status: str, user_id: str):
         return self.assessment_repo.update_result_grade(job_id, student_id, question_id, grade, feedback, status, user_id)
 
+    def update_student_result_with_multi_ai_data(self, job_id: str, student_id: str, question_id: str, 
+                                                grade: Optional[float], feedback: str, status: str,
+                                                ai_responses: List[Dict], consensus_achieved: str, user_id: str):
+        """NEW: Pass-through for multi-model AI grading results."""
+        return self.assessment_repo.update_student_result_with_multi_ai_data(
+            job_id, student_id, question_id, grade, feedback, status, ai_responses, consensus_achieved, user_id
+        )
+
     def update_student_result_path(self, job_id: str, student_id: str, path: str, content_type: str, user_id: str):
         return self.assessment_repo.update_result_path(job_id, student_id, path, content_type, user_id)
 
