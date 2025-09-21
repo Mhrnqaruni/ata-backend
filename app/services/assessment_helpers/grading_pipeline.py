@@ -8,6 +8,9 @@ from PIL import Image
 
 from ..database_service import DatabaseService
 from .. import gemini_service
+from ..multi_model_ai import generate_multi_model_responses
+from ..ai_consensus import evaluate_consensus, determine_final_status
+from ...models.assessment_model import AIModelResponse, ConsensusType
 
 def _safe_float_convert(value) -> Optional[float]:
     """A helper to safely convert grade values to float, returning None if invalid."""
@@ -43,10 +46,18 @@ def _prepare_images_from_answersheet(answer_sheet_path: str, content_type: str) 
     
     return image_list
 
+async def _invoke_multi_model_grading_ai(prompt: str, images: List[Image.Image]) -> List[Dict]:
+    """
+    NEW: Calls 3 AI models concurrently for grading.
+    Returns list of responses from all 3 models.
+    """
+    return await generate_multi_model_responses(prompt, images)
+
 async def _invoke_grading_ai(prompt: str, images: List[Image.Image]) -> str:
     """
-    Specialist for AI interaction.
-    Calls the gemini_service to get the AI's grading response.
+    LEGACY: Specialist for AI interaction.
+    Calls the gemini_service to get a single AI's grading response.
+    Kept for backward compatibility.
     """
     return await gemini_service.generate_multimodal_response(prompt, images)
 
@@ -62,10 +73,48 @@ def _parse_ai_grading_response(ai_response_str: str) -> Dict:
     
     return json.loads(ai_response_str[start_index:end_index])
 
-def _save_grading_results_to_db(db: DatabaseService, job_id: str, student_id: str, parsed_results: Dict):
+def _save_multi_model_results_to_db(db: DatabaseService, job_id: str, student_id: str, question_results: List[Dict], user_id: str):
     """
-    Specialist for persistence.
+    NEW: Saves multi-model AI grading results with consensus information.
+    
+    Args:
+        question_results: List of dicts containing per-question consensus results
+        Each dict should have: question_id, grade, feedback, status, ai_responses, consensus_achieved
+    """
+    for result in question_results:
+        # Store the consensus result
+        final_grade = _safe_float_convert(result.get('grade'))
+        final_feedback = result.get('feedback', 'No feedback provided.')
+        final_status = result.get('status', 'pending_review')
+        
+        # Prepare AI responses data for JSON storage
+        ai_responses_data = []
+        for ai_resp in result.get('ai_responses', []):
+            ai_responses_data.append({
+                "model_id": ai_resp.model_id,
+                "grade": ai_resp.grade,
+                "feedback": ai_resp.feedback,
+                "raw_response": ai_resp.raw_response
+            })
+        
+        # Update the result with all the new multi-model data
+        db.update_student_result_with_multi_ai_data(
+            job_id=job_id,
+            student_id=student_id,
+            question_id=result['question_id'],
+            grade=final_grade,
+            feedback=final_feedback,
+            status=final_status,
+            ai_responses=ai_responses_data,
+            consensus_achieved=result.get('consensus_achieved'),
+            user_id=user_id
+        )
+
+def _save_grading_results_to_db(db: DatabaseService, job_id: str, student_id: str, parsed_results: Dict, user_id: str):
+    """
+    LEGACY: Specialist for persistence.
     Loops through the parsed AI results, cleans the data, and saves it to the database.
+    Updated to include user_id parameter for consistency.
     """
     for result in parsed_results['results']:
         clean_grade = _safe_float_convert(result.get('grade'))
@@ -77,5 +126,6 @@ def _save_grading_results_to_db(db: DatabaseService, job_id: str, student_id: st
             question_id=result['question_id'],
             grade=clean_grade,
             feedback=clean_feedback,
-            status="ai_graded"
+            status="ai_graded",
+            user_id=user_id
         )

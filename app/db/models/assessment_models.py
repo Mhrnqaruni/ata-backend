@@ -58,12 +58,15 @@ class Result(Base):
     """
     SQLAlchemy model representing the grade and feedback for a single question
     for a single student within an Assessment.
+    
+    Now supports multi-model AI grading with consensus tracking.
     """
     id = Column(String, primary_key=True, index=True)
     job_id = Column(String, ForeignKey("assessments.id"), nullable=False)
     student_id = Column(String, ForeignKey("students.id"), nullable=False)
     question_id = Column(String, nullable=False)
     
+    # Final consensus grade and feedback
     grade = Column(Float, nullable=True)
     feedback = Column(String, nullable=True)
     extractedAnswer = Column(String, nullable=True)
@@ -71,6 +74,11 @@ class Result(Base):
     report_token = Column(String, unique=True, index=True, nullable=True)
     answer_sheet_path = Column(String, nullable=True)
     content_type = Column(String, nullable=True)
+    
+    # New fields for multi-model AI grading
+    ai_responses = Column(JSON, nullable=True)  # Array of all 3 AI responses
+    consensus_achieved = Column(String, nullable=True)  # "full", "majority", or "none"
+    teacher_override = Column(JSON, nullable=True)  # Teacher's manual grade/feedback if any
     
     # Relationships remain unchanged.
     assessment = relationship("Assessment", back_populates="results")

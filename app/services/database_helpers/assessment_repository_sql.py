@@ -142,6 +142,31 @@ class AssessmentRepositorySQL:
             result.status = status
             self.db.commit()
 
+    def update_student_result_with_multi_ai_data(self, job_id: str, student_id: str, question_id: str, 
+                                                 grade: Optional[float], feedback: str, status: str,
+                                                 ai_responses: List[Dict], consensus_achieved: str, user_id: str):
+        """
+        NEW: Updates a single result with multi-model AI grading data including consensus information.
+        """
+        result = (
+            self.db.query(Result)
+            .join(Assessment, Result.job_id == Assessment.id)
+            .filter(
+                Result.job_id == job_id,
+                Result.student_id == student_id,
+                Result.question_id == question_id,
+                Assessment.user_id == user_id
+            )
+            .first()
+        )
+        if result:
+            result.grade = grade
+            result.feedback = feedback
+            result.status = status
+            result.ai_responses = ai_responses
+            result.consensus_achieved = consensus_achieved
+            self.db.commit()
+
     def update_result_path(self, job_id: str, student_id: str, path: str, content_type: str, user_id: str):
         """
         Updates the answer sheet path for all results belonging to a student
