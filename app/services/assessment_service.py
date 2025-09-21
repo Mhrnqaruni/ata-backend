@@ -136,7 +136,7 @@ class AssessmentService:
             multi_ai_responses = await grading_pipeline._invoke_multi_model_grading_ai(prompt, image_list)
             
             # Parse each AI response and evaluate consensus per question
-            from ..services.ai_consensus import evaluate_consensus, determine_final_status
+            from app.services.ai_consensus import evaluate_consensus, determine_final_status
             
             # Group responses by question for consensus evaluation
             question_results = []
@@ -304,6 +304,153 @@ class AssessmentService:
         prompt = prompt_library.ANALYTICS_SUMMARY_PROMPT.format(analytics_json=json.dumps(job_results['analytics'], indent=2))
         summary_text = await gemini_service.generate_text(prompt, temperature=0.6)
         self.db.update_job_with_summary(job_id=job_id, user_id=user_id, summary=summary_text)
+
+    # --- NEW METHODS FOR MULTI-MODEL AI GRADING AND TEACHER REVIEW ---
+
+    def get_categorized_job_results(self, job_id: str, user_id: str) -> Optional[Dict]:
+        """Get results categorized by AI-graded vs pending review status."""
+        job_record = self.db.get_assessment_job(job_id=job_id, user_id=user_id)
+        if not job_record:
+            return None
+            
+        config_v2 = analytics_and_matching.normalize_config_to_v2(job_record)
+        class_students = self.db.get_students_by_class_id(class_id=config_v2.classId, user_id=user_id)
+        all_results = self.db.get_all_results_for_job(job_id=job_id, user_id=user_id)
+        
+        # Categorize students by their result status
+        ai_graded_students = []
+        pending_review_students = []
+        
+        for student in class_students:
+            student_results = [r for r in all_results if r.student_id == student.id]
+            has_pending = any(r.status == "pending_review" for r in student_results)
+            
+            student_data = {
+                "id": student.id,
+                "name": student.name,
+                "answerSheetPath": self.db.get_student_result_path(job_id, student.id, user_id)
+            }
+            
+            if has_pending:
+                pending_review_students.append(student_data)
+            else:
+                ai_graded_students.append(student_data)
+        
+        analytics_data = None
+        if job_record.status == assessment_model.JobStatus.COMPLETED.value:
+            analytics_data = analytics_and_matching.calculate_analytics(all_results, config_v2)
+            
+        return {
+            "jobId": job_record.id,
+            "assessmentName": config_v2.assessmentName,
+            "status": job_record.status,
+            "config": config_v2,
+            "ai_graded_students": ai_graded_students,
+            "pending_review_students": pending_review_students,
+            "analytics": analytics_data,
+            "aiSummary": job_record.ai_summary
+        }
+
+    def get_student_review_data(self, job_id: str, student_id: str, user_id: str) -> Optional[Dict]:
+        """Get data for teacher review page for a specific student."""
+        job_record = self.db.get_assessment_job(job_id=job_id, user_id=user_id)
+        if not job_record:
+            return None
+            
+        config_v2 = analytics_and_matching.normalize_config_to_v2(job_record)
+        student = self.db.get_student_by_student_id(student_id=student_id)
+        if not student:
+            return None
+            
+        all_results = [r for r in self.db.get_all_results_for_job(job_id=job_id, user_id=user_id) 
+                      if r.student_id == student_id]
+        
+        # Categorize questions by status
+        pending_questions = []
+        ai_graded_questions = []
+        
+        all_questions = [q for s in config_v2.sections for q in s.questions]
+        
+        for question in all_questions:
+            question_result = next((r for r in all_results if r.question_id == question.id), None)
+            
+            question_data = {
+                "question": question.model_dump(),
+                "student_answer": question_result.extractedAnswer if question_result else None,
+                "result": question_result
+            }
+            
+            if question_result and question_result.status == "pending_review":
+                pending_questions.append(question_data)
+            else:
+                ai_graded_questions.append(question_data)
+        
+        return {
+            "jobId": job_id,
+            "assessmentName": config_v2.assessmentName,
+            "student": {"id": student.id, "name": student.name},
+            "questions": all_questions,
+            "pending_questions": pending_questions,
+            "ai_graded_questions": ai_graded_questions
+        }
+
+    def submit_teacher_review(self, job_id: str, student_id: str, question_id: str, 
+                            grade: float, feedback: str, user_id: str):
+        """Submit teacher's manual review for a pending question."""
+        # Update the result with teacher's grade and change status to teacher_graded
+        self.db.update_student_result_with_grade(
+            job_id=job_id,
+            student_id=student_id,
+            question_id=question_id,
+            grade=grade,
+            feedback=feedback,
+            status="teacher_graded",
+            user_id=user_id
+        )
+
+    def save_teacher_override(self, job_id: str, student_id: str, question_id: str, 
+                            override_data: assessment_model.TeacherOverride, user_id: str):
+        """Save teacher's override for an AI-graded question."""
+        import datetime
+        
+        # Get current result to preserve AI data
+        results = self.db.get_all_results_for_job(job_id=job_id, user_id=user_id)
+        current_result = next((r for r in results if r.student_id == student_id and r.question_id == question_id), None)
+        
+        if current_result:
+            # Prepare teacher override data
+            teacher_override = {
+                "grade": override_data.grade,
+                "feedback": override_data.feedback,
+                "timestamp": datetime.datetime.now().isoformat(),
+                "original_ai_grade": current_result.grade,
+                "original_ai_feedback": current_result.feedback
+            }
+            
+            # Update result with teacher's override
+            if hasattr(self.db.assessment_repo, 'update_result_with_teacher_override'):
+                self.db.assessment_repo.update_result_with_teacher_override(
+                    job_id, student_id, question_id, 
+                    override_data.grade, override_data.feedback, 
+                    teacher_override, user_id
+                )
+            else:
+                # Fallback to regular update
+                self.db.update_student_result_with_grade(
+                    job_id=job_id,
+                    student_id=student_id,
+                    question_id=question_id,
+                    grade=override_data.grade,
+                    feedback=override_data.feedback,
+                    status="teacher_graded",
+                    user_id=user_id
+                )
+
+    def regenerate_reports_with_teacher_changes(self, job_id: str, user_id: str):
+        """Regenerate reports after teacher makes changes."""
+        # This would trigger report regeneration with updated grades/feedback
+        # For now, just mark the job as needing report regeneration
+        pass
 
 # --- SINGLETON & DEPENDENCY PROVIDER ---
 def get_assessment_service(db: DatabaseService = Depends(get_db_service)):

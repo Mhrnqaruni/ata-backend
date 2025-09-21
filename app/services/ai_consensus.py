@@ -1,7 +1,7 @@
 # AI consensus evaluation utilities
 import json
 from typing import List, Dict, Optional, Tuple
-from ..models.assessment_model import AIModelResponse, ConsensusType
+from app.models.assessment_model import AIModelResponse, ConsensusType
 
 def parse_ai_response(response_text: str, model_id: str) -> Optional[Dict]:
     """Parse a single AI response and extract grade/feedback."""

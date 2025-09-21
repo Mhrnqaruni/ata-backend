@@ -249,3 +249,123 @@ async def download_single_report(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# --- NEW ENDPOINTS FOR MULTI-MODEL AI GRADING AND TEACHER REVIEW ---
+
+@router.get(
+    "/{job_id}/results/categorized",
+    response_model=assessment_model.CategorizedResultsResponse,
+    summary="Get Categorized Assessment Results (AI-graded vs Pending Review)"
+)
+def get_categorized_assessment_results(
+    job_id: str,
+    assessment_svc: AssessmentService = Depends(get_assessment_service),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """Retrieves assessment results categorized by AI-graded vs pending review status."""
+    try:
+        categorized_results = assessment_svc.get_categorized_job_results(job_id=job_id, user_id=current_user.id)
+        if categorized_results is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Job {job_id} not found or access denied.")
+        return categorized_results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/{job_id}/review/{student_id}",
+    response_model=assessment_model.ReviewPageResponse,
+    summary="Get Student Review Page Data"
+)
+def get_student_review_page(
+    job_id: str,
+    student_id: str,
+    assessment_svc: AssessmentService = Depends(get_assessment_service),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """Retrieves data for the teacher review page for a specific student."""
+    try:
+        review_data = assessment_svc.get_student_review_data(
+            job_id=job_id, 
+            student_id=student_id, 
+            user_id=current_user.id
+        )
+        if review_data is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student review data not found or access denied.")
+        return review_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch(
+    "/{job_id}/review/{student_id}/{question_id}/pending",
+    summary="Submit Teacher Review for Pending Question"
+)
+def submit_pending_review(
+    job_id: str,
+    student_id: str,
+    question_id: str,
+    review_request: assessment_model.PendingReviewRequest,
+    assessment_svc: AssessmentService = Depends(get_assessment_service),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """Submits teacher's manual grade/feedback for a pending review question."""
+    try:
+        assessment_svc.submit_teacher_review(
+            job_id=job_id,
+            student_id=student_id, 
+            question_id=question_id,
+            grade=review_request.grade,
+            feedback=review_request.feedback,
+            user_id=current_user.id
+        )
+        return {"status": "success", "detail": "Teacher review submitted successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch(
+    "/{job_id}/review/{student_id}/{question_id}/override",
+    summary="Save Teacher Override for AI-Graded Question"
+)
+def save_teacher_override(
+    job_id: str,
+    student_id: str,
+    question_id: str,
+    override_request: assessment_model.TeacherOverride,
+    assessment_svc: AssessmentService = Depends(get_assessment_service),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """Saves teacher's override for an AI-graded question."""
+    try:
+        assessment_svc.save_teacher_override(
+            job_id=job_id,
+            student_id=student_id,
+            question_id=question_id,
+            override_data=override_request,
+            user_id=current_user.id
+        )
+        return {"status": "success", "detail": "Teacher override saved successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/{job_id}/regenerate-reports",
+    summary="Regenerate Reports After Teacher Changes"
+)
+def regenerate_reports_after_changes(
+    job_id: str,
+    assessment_svc: AssessmentService = Depends(get_assessment_service),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """Regenerates student reports after teacher makes manual changes."""
+    try:
+        assessment_svc.regenerate_reports_with_teacher_changes(
+            job_id=job_id,
+            user_id=current_user.id
+        )
+        return {"status": "success", "detail": "Reports regenerated successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

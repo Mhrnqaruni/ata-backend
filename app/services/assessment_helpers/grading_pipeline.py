@@ -8,9 +8,9 @@ from PIL import Image
 
 from ..database_service import DatabaseService
 from .. import gemini_service
-from ..multi_model_ai import generate_multi_model_responses
+from ..multi_model_ai import generate_multi_model_responses  
 from ..ai_consensus import evaluate_consensus, determine_final_status
-from ...models.assessment_model import AIModelResponse, ConsensusType
+from app.models.assessment_model import AIModelResponse, ConsensusType
 
 def _safe_float_convert(value) -> Optional[float]:
     """A helper to safely convert grade values to float, returning None if invalid."""
