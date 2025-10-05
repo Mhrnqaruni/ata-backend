@@ -2,6 +2,8 @@
 
 import pytest
 import json
+from datetime import datetime
+from unittest.mock import MagicMock
 
 # Import the specialist functions we want to test
 from app.services.assessment_helpers.data_assembly import _assemble_job_summaries, _build_results_dictionary
@@ -11,7 +13,18 @@ from app.models.assessment_model import QuestionConfig
 
 @pytest.fixture
 def mock_all_jobs():
-    """Provides a list of mock job records, as if from database_service."""
+    """Provides a list of mock job objects, as if from the database."""
+    def create_mock_job(id, config_dict, status, created_at_iso):
+        mock = MagicMock()
+        mock.id = id
+        mock.config = json.dumps(config_dict)
+        mock.status = status
+        # FIX: Convert ISO string to a real datetime object
+        mock.created_at = datetime.fromisoformat(created_at_iso.replace('Z', '+00:00'))
+        # This is needed for the `r.__dict__` call in the code under test
+        mock.__dict__ = {'id': mock.id, 'config': mock.config, 'status': mock.status, 'created_at': mock.created_at}
+        return mock
+
     v1_config = {
         "assessmentName": "History Quiz",
         "classId": "cls_101",
@@ -19,22 +32,28 @@ def mock_all_jobs():
         "includeImprovementTips": False
     }
     return [
-        {"id": "job_1", "config": json.dumps(v1_config), "status": "Completed", "created_at": "2025-01-01T12:00:00Z"},
-        # Add another job to test the loop
+        create_mock_job("job_1", v1_config, "Completed", "2025-01-01T12:00:00Z"),
     ]
 
 @pytest.fixture
 def mock_all_results():
-    """Provides a list of mock result records, as if from database_service."""
+    """Provides a list of mock result objects, as if from the database."""
+    def create_mock_result(job_id, student_id, question_id, grade, status):
+        mock = MagicMock()
+        mock.job_id = job_id
+        mock.student_id = student_id
+        mock.question_id = question_id
+        mock.grade = grade
+        mock.status = status
+        # This is needed for the `r.__dict__` call in the code under test
+        mock.__dict__ = {'job_id': mock.job_id, 'student_id': mock.student_id, 'question_id': mock.question_id, 'grade': mock.grade, 'status': mock.status}
+        return mock
+
     return [
-        # Results for job_1
-        {"job_id": "job_1", "student_id": "stu_A", "question_id": "q_1", "grade": "9.5", "status": "ai_graded"},
-        # Student B is only partially processed for this job
-        {"job_id": "job_1", "student_id": "stu_B", "question_id": "q_1", "grade": None, "status": "pending"},
-        # Student C is fully processed
-        {"job_id": "job_1", "student_id": "stu_C", "question_id": "q_1", "grade": "7.0", "status": "edited_by_teacher"},
-        # Irrelevant result from another job
-        {"job_id": "job_2", "student_id": "stu_D", "question_id": "q_x", "grade": "10.0", "status": "ai_graded"},
+        create_mock_result("job_1", "stu_A", "q_1", 9.5, "ai_graded"),
+        create_mock_result("job_1", "stu_B", "q_1", None, "pending"),
+        create_mock_result("job_1", "stu_C", "q_1", 7.0, "edited_by_teacher"),
+        create_mock_result("job_2", "stu_D", "q_x", 10.0, "ai_graded"),
     ]
 
 @pytest.fixture
@@ -47,11 +66,17 @@ def mock_all_classes():
 
 @pytest.fixture
 def mock_class_students():
-    """Provides a mock list of students for a specific class."""
+    """Provides a mock list of student objects for a specific class."""
+    def create_mock_student(id, name):
+        mock = MagicMock()
+        mock.id = id
+        mock.name = name
+        return mock
+
     return [
-        {"id": "stu_A", "name": "Alice"},
-        {"id": "stu_B", "name": "Bob"},
-        {"id": "stu_C", "name": "Charlie"},
+        create_mock_student("stu_A", "Alice"),
+        create_mock_student("stu_B", "Bob"),
+        create_mock_student("stu_C", "Charlie"),
     ]
 
 @pytest.fixture
@@ -100,7 +125,8 @@ def test_build_results_dictionary(mock_class_students, mock_questions_config, mo
     THEN:  It should return a correctly nested dictionary with all students and questions.
     """
     # Filter results for just job_1 for this test
-    job_1_results = [r for r in mock_all_results if r['job_id'] == 'job_1']
+    # FIX: Use attribute access (r.job_id) instead of dictionary access (r['job_id'])
+    job_1_results = [r for r in mock_all_results if r.job_id == 'job_1']
 
     # Call the function under test
     results_dict = _build_results_dictionary(mock_class_students, mock_questions_config, job_1_results)

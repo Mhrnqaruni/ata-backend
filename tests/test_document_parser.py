@@ -18,6 +18,7 @@ def mock_upload_file():
     mock = MagicMock(spec=UploadFile)
     mock.read = AsyncMock(return_value=b"fake pdf content")
     mock.content_type = "application/pdf"
+    mock.filename = "test_document.pdf"
     return mock
 
 @pytest.fixture
@@ -72,7 +73,7 @@ async def test_parse_document_to_config_success(mocker, mock_upload_file, mock_a
     class_id = "cls_test_123"
     assessment_name = "Test Biology Midterm"
     
-    result_dict = await parse_document_to_config(mock_upload_file, class_id, assessment_name)
+    result_dict = await parse_document_to_config(mock_upload_file, None, class_id, assessment_name)
 
     assert isinstance(result_dict, dict)
     assert result_dict['assessmentName'] == assessment_name

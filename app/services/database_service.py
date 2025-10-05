@@ -26,9 +26,11 @@ from .database_helpers.generation_repository_sql import GenerationRepositorySQL
 # --- Import SQLAlchemy Models for Accurate Type Hinting ---
 from app.db.models.user_model import User
 from app.db.models.class_student_models import Class, Student
-from app.db.models.assessment_models import Assessment, Result
+from app.db.models.assessment_models import Assessment, Result, ResultStatus, FinalizedBy
+from app.db.models.ai_model_run import AIModelRun
 from app.db.models.chat_models import ChatSession, ChatMessage
 from app.db.models.generation_models import Generation
+from app.db.models.outsider_student import OutsiderStudent
 
 
 class DatabaseService:
@@ -78,6 +80,9 @@ class DatabaseService:
     def add_student(self, student_record: Dict) -> Student:
         return self.class_student_repo.add_student(student_record)
 
+    def add_outsider_student(self, student_record: Dict) -> OutsiderStudent:
+        return self.class_student_repo.add_outsider_student(student_record)
+
     def update_student(self, student_id: str, user_id: str, student_update_data: Dict) -> Optional[Student]:
         return self.class_student_repo.update_student(student_id=student_id, user_id=user_id, data=student_update_data)
 
@@ -86,6 +91,26 @@ class DatabaseService:
     
     def get_student_by_student_id(self, student_id: str) -> Optional[Student]:
         return self.class_student_repo.get_student_by_student_id(student_id=student_id)
+
+    def get_student_by_id(self, student_id: str, user_id: str) -> Optional[Student]:
+        return self.class_student_repo.get_student_by_id(student_id=student_id, user_id=user_id)
+
+    # --- NEW: Student Membership Methods ---
+    def get_class_memberships_for_student(self, student_id: str, user_id: str) -> List:
+        return self.class_student_repo.get_class_memberships_for_student(student_id=student_id, user_id=user_id)
+
+    def add_student_to_class(self, student_id: str, class_id: str) -> bool:
+        return self.class_student_repo.add_student_to_class(student_id=student_id, class_id=class_id)
+
+    def remove_student_from_class(self, student_id: str, class_id: str) -> bool:
+        return self.class_student_repo.remove_student_from_class(student_id=student_id, class_id=class_id)
+
+    # --- NEW: Assessment Methods for Student Transcript ---
+    def get_assessments_for_class(self, class_id: str, user_id: str) -> List[Assessment]:
+        return self.assessment_repo.get_assessments_for_class(class_id=class_id, user_id=user_id)
+
+    def get_results_for_student_and_job(self, student_id: str, job_id: str, user_id: str) -> List[Result]:
+        return self.assessment_repo.get_results_for_student_and_job(student_id=student_id, job_id=job_id, user_id=user_id)
 
     # --- MODIFIED: Generation History Methods ---
     def get_all_generations(self, user_id: str) -> List[Generation]:
@@ -135,6 +160,18 @@ class DatabaseService:
     def delete_assessment_job(self, job_id: str, user_id: str) -> bool:
         return self.assessment_repo.delete_job(job_id, user_id)
 
+    def create_ai_model_run(self, **kwargs) -> AIModelRun:
+        return self.assessment_repo.add_ai_model_run(kwargs)
+
+    def get_ai_model_runs_for_question(self, job_id: str, entity_id: str, question_id: str, is_outsider: bool) -> List[AIModelRun]:
+        return self.assessment_repo.get_ai_model_runs_for_question(job_id, entity_id, question_id, is_outsider)
+
+    def update_result_extracted_answer(self, job_id: str, entity_id: str, is_outsider: bool, question_id: str, extracted_answer: str, user_id: str):
+        return self.assessment_repo.update_result_extracted_answer(job_id, entity_id, is_outsider, question_id, extracted_answer, user_id)
+
+    def are_any_questions_pending_review(self, job_id: str, user_id: str) -> bool:
+        return self.assessment_repo.are_any_questions_pending_review(job_id, user_id)
+
     def save_student_grade_result(self, result_record: Dict) -> Result:
         return self.assessment_repo.add_result(result_record)
 
@@ -144,14 +181,23 @@ class DatabaseService:
     def get_result_by_token(self, token: str) -> Optional[Result]:
         return self.assessment_repo.get_result_by_token(token)
 
-    def update_student_result_with_grade(self, job_id: str, student_id: str, question_id: str, grade: Optional[float], feedback: str, status: str, user_id: str):
-        return self.assessment_repo.update_result_grade(job_id, student_id, question_id, grade, feedback, status, user_id)
+    def update_student_result_with_grade(self, job_id: str, student_id: str, question_id: str, grade: Optional[float], feedback: str, status: str, finalized_by: Optional[str], user_id: str):
+        return self.assessment_repo.update_result_grade(job_id, student_id, question_id, grade, feedback, status, finalized_by, user_id)
+
+    def update_outsider_result_grade(self, job_id: str, outsider_student_id: str, question_id: str, grade: Optional[float], feedback: str, status: str, finalized_by: Optional[str], user_id: str):
+        return self.assessment_repo.update_outsider_result_grade(job_id, outsider_student_id, question_id, grade, feedback, status, finalized_by, user_id)
 
     def update_student_result_path(self, job_id: str, student_id: str, path: str, content_type: str, user_id: str):
         return self.assessment_repo.update_result_path(job_id, student_id, path, content_type, user_id)
 
-    def get_students_with_paths(self, job_id: str, user_id: str) -> List[Dict]:
-        return self.assessment_repo.get_students_with_paths(job_id, user_id)
+    def get_entities_with_paths(self, job_id: str, user_id: str) -> List[Dict]:
+        return self.assessment_repo.get_entities_with_paths(job_id, user_id)
+
+    def get_outsider_student_by_id(self, outsider_student_id: str, user_id: str) -> Optional[OutsiderStudent]:
+        return self.assessment_repo.get_outsider_student_by_id(outsider_student_id, user_id)
+
+    def get_all_outsider_students_for_job(self, job_id: str, user_id: str) -> List[OutsiderStudent]:
+        return self.assessment_repo.get_all_outsider_students_for_job(job_id, user_id)
 
     # --- MODIFIED: Chatbot Helper Methods ---
     def get_classes_for_chatbot(self, user_id: str) -> List[Dict]:

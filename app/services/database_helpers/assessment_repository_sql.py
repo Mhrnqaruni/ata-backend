@@ -17,8 +17,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 # Import the SQLAlchemy models this repository will interact with.
-from app.db.models.assessment_models import Assessment, Result
+from app.db.models.assessment_models import Assessment, Result, ResultStatus, FinalizedBy
+from app.db.models.ai_model_run import AIModelRun
 from app.db.models.class_student_models import Student, Class
+from app.db.models.outsider_student import OutsiderStudent
 
 class AssessmentRepositorySQL:
     def __init__(self, db_session: Session):
@@ -90,6 +92,48 @@ class AssessmentRepositorySQL:
             return True
         return False
 
+    def add_ai_model_run(self, record: Dict) -> AIModelRun:
+        """Creates a new AIModelRun record."""
+        new_run = AIModelRun(**record)
+        self.db.add(new_run)
+        self.db.commit()
+        self.db.refresh(new_run)
+        return new_run
+
+    def get_ai_model_runs_for_question(self, job_id: str, entity_id: str, question_id: str, is_outsider: bool) -> List[AIModelRun]:
+        """Retrieves all AI model runs for a specific question, entity (student or outsider), and job."""
+        query = self.db.query(AIModelRun).filter_by(job_id=job_id, question_id=question_id)
+        if is_outsider:
+            query = query.filter_by(outsider_student_id=entity_id)
+        else:
+            query = query.filter_by(student_id=entity_id)
+        return query.order_by(AIModelRun.run_index).all()
+
+    def update_result_extracted_answer(self, job_id: str, entity_id: str, is_outsider: bool, question_id: str, extracted_answer: str, user_id: str):
+        """Updates the extractedAnswer for a specific result, checking for user ownership."""
+        query = (
+            self.db.query(Result)
+            .join(Assessment, Result.job_id == Assessment.id)
+            .filter(
+                Result.job_id == job_id,
+                Result.question_id == question_id,
+                Assessment.user_id == user_id
+            )
+        )
+        if is_outsider:
+            query = query.filter(Result.outsider_student_id == entity_id)
+        else:
+            query = query.filter(Result.student_id == entity_id)
+
+        result = query.first()
+        if result:
+            result.extractedAnswer = extracted_answer
+            self.db.commit()
+
+    def are_any_questions_pending_review(self, job_id: str, user_id: str) -> bool:
+        """Checks if any results for a job are in PENDING_REVIEW state."""
+        return self.db.query(Result).filter(Result.job_id == job_id, Result.status == ResultStatus.PENDING_REVIEW.value).count() > 0
+
     # --- Assessment Result Methods ---
 
     def add_result(self, record: Dict) -> Result:
@@ -120,7 +164,7 @@ class AssessmentRepositorySQL:
         """
         return self.db.query(Result).filter(Result.report_token == token).first()
         
-    def update_result_grade(self, job_id: str, student_id: str, question_id: str, grade: Optional[float], feedback: str, status: str, user_id: str):
+    def update_result_grade(self, job_id: str, student_id: str, question_id: str, grade: Optional[float], feedback: str, status: str, finalized_by: Optional[str], user_id: str):
         """
         Updates a single result's grade and feedback, but only if the result
         belongs to an assessment job owned by the specified user.
@@ -140,6 +184,30 @@ class AssessmentRepositorySQL:
             result.grade = grade
             result.feedback = feedback
             result.status = status
+            result.finalized_by = finalized_by
+            self.db.commit()
+
+    def update_outsider_result_grade(self, job_id: str, outsider_student_id: str, question_id: str, grade: Optional[float], feedback: str, status: str, finalized_by: Optional[str], user_id: str):
+        """
+        Updates a single result's grade and feedback for an OUTSIDER student,
+        but only if the result belongs to an assessment job owned by the specified user.
+        """
+        result = (
+            self.db.query(Result)
+            .join(Assessment, Result.job_id == Assessment.id)
+            .filter(
+                Result.job_id == job_id,
+                Result.outsider_student_id == outsider_student_id,
+                Result.question_id == question_id,
+                Assessment.user_id == user_id
+            )
+            .first()
+        )
+        if result:
+            result.grade = grade
+            result.feedback = feedback
+            result.status = status
+            result.finalized_by = finalized_by
             self.db.commit()
 
     def update_result_path(self, job_id: str, student_id: str, path: str, content_type: str, user_id: str):
@@ -159,22 +227,79 @@ class AssessmentRepositorySQL:
                 result.status = 'matched'
             self.db.commit()
 
-    def get_students_with_paths(self, job_id: str, user_id: str) -> List[Dict]:
+    def get_entities_with_paths(self, job_id: str, user_id: str) -> List[Dict]:
         """
-        Gets a distinct list of students and their matched answer sheet paths
-        for a given job, but only if the job is owned by the user.
+        Gets a distinct list of entities (students and outsiders) and their matched
+        answer sheet paths for a given job, ensuring the user owns the job.
         """
         parent_job = self.get_job(job_id=job_id, user_id=user_id)
         if not parent_job:
             return []
 
-        stmt = (
-            select(Result.student_id, Result.answer_sheet_path, Result.content_type)
-            .where(Result.job_id == job_id, Result.answer_sheet_path.isnot(None), Result.answer_sheet_path != '')
+        # Query for rostered students with paths
+        roster_stmt = (
+            select(
+                Result.student_id.label('entity_id'),
+                Result.answer_sheet_path,
+                Result.content_type
+            )
+            .where(
+                Result.job_id == job_id,
+                Result.student_id.isnot(None),
+                Result.answer_sheet_path.isnot(None),
+                Result.answer_sheet_path != ''
+            )
             .distinct()
         )
-        results = self.db.execute(stmt).mappings().all()
-        return [dict(row) for row in results]
+        roster_results = self.db.execute(roster_stmt).mappings().all()
+
+        # Query for outsider students with paths
+        outsider_stmt = (
+            select(
+                Result.outsider_student_id.label('entity_id'),
+                Result.answer_sheet_path,
+                Result.content_type
+            )
+            .where(
+                Result.job_id == job_id,
+                Result.outsider_student_id.isnot(None),
+                Result.answer_sheet_path.isnot(None),
+                Result.answer_sheet_path != ''
+            )
+            .distinct()
+        )
+        outsider_results = self.db.execute(outsider_stmt).mappings().all()
+
+        # Combine and add the is_outsider flag
+        entities = []
+        for row in roster_results:
+            entities.append({**row, "is_outsider": False})
+        for row in outsider_results:
+            entities.append({**row, "is_outsider": True})
+
+        return entities
+
+    def get_outsider_student_by_id(self, outsider_student_id: str, user_id: str) -> Optional[OutsiderStudent]:
+        """
+        Securely fetches a single outsider student by their primary key ID,
+        ensuring they belong to an assessment owned by the specified user.
+        """
+        return (
+            self.db.query(OutsiderStudent)
+            .join(Assessment, OutsiderStudent.assessment_id == Assessment.id)
+            .filter(OutsiderStudent.id == outsider_student_id, Assessment.user_id == user_id)
+            .first()
+        )
+
+    def get_all_outsider_students_for_job(self, job_id: str, user_id: str) -> List[OutsiderStudent]:
+        """
+        Retrieves all outsider students for a given job, but only if the job is
+        owned by the specified user.
+        """
+        parent_job = self.get_job(job_id=job_id, user_id=user_id)
+        if not parent_job:
+            return []
+        return self.db.query(OutsiderStudent).filter(OutsiderStudent.assessment_id == job_id).all()
 
     # --- [START OF NEW METHOD TO FIX ATTRIBUTEERROR] ---
     def get_student_result_path(self, job_id: str, student_id: str, user_id: str) -> Optional[str]:
@@ -288,3 +413,55 @@ class AssessmentRepositorySQL:
         if result:
             result.status = status
             self.db.commit()
+
+    # --- NEW: Student Transcript Methods ---
+
+    def get_assessments_for_class(self, class_id: str, user_id: str) -> List[Assessment]:
+        """
+        Retrieves all assessments that belong to a specific class.
+        Checks the config JSON for classIds array (multi-class) or classId (single class).
+        """
+        # Get all assessments for the user, then filter in Python
+        # This is because JSON (not JSONB) doesn't support the @> operator
+        all_assessments = (
+            self.db.query(Assessment)
+            .filter(Assessment.user_id == user_id)
+            .order_by(Assessment.created_at.desc())
+            .all()
+        )
+
+        # Filter assessments that have this class_id
+        matching_assessments = []
+        for assessment in all_assessments:
+            if not assessment.config:
+                continue
+
+            # Check for classIds array (new multi-class format)
+            if 'classIds' in assessment.config:
+                class_ids = assessment.config.get('classIds', [])
+                if class_id in class_ids:
+                    matching_assessments.append(assessment)
+            # Check for classId string (old single-class format) - BACKWARD COMPATIBILITY
+            elif 'classId' in assessment.config:
+                if assessment.config.get('classId') == class_id:
+                    matching_assessments.append(assessment)
+
+        return matching_assessments
+
+    def get_results_for_student_and_job(self, student_id: str, job_id: str, user_id: str) -> List[Result]:
+        """
+        Retrieves all results for a specific student in a specific assessment.
+        Validates that the assessment belongs to the user.
+        """
+        parent_job = self.get_job(job_id=job_id, user_id=user_id)
+        if not parent_job:
+            return []
+
+        return (
+            self.db.query(Result)
+            .filter(
+                Result.job_id == job_id,
+                Result.student_id == student_id
+            )
+            .all()
+        )

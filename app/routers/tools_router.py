@@ -10,6 +10,9 @@ correctly attributed and saved to the user's private history.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
 import json
 
 # --- Application-specific Imports ---
@@ -63,7 +66,7 @@ async def generate_tool_content_from_text(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
-        print(f"ERROR during text generation for user {current_user.id}: {e}")
+        logger.info(f"ERROR during text generation for user {current_user.id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred.")
 
 
@@ -99,5 +102,5 @@ async def generate_tool_content_from_upload(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
-        print(f"ERROR during upload generation for user {current_user.id}: {e}")
+        logger.info(f"ERROR during upload generation for user {current_user.id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred.")

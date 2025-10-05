@@ -43,3 +43,6 @@ passlib[bcrypt]
 python-jose[cryptography]
 # For robust email validation in Pydantic models.
 email-validator
+
+
+apscheduler

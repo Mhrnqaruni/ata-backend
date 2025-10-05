@@ -107,24 +107,146 @@ async def generate_json(prompt: str, temperature: float = 0.1) -> Dict:
         print(f"ERROR in generate_json with Gemini API: {e}")
         raise ValueError(f"Failed to get a valid JSON response from the AI. Error: {e}")
 
-async def ocr_file_with_gemini(file_bytes: bytes, mime_type: str) -> str:
+async def generate_multimodal_json(prompt: str, images: List[Image.Image]) -> Dict:
     """
-    DEPRECATED in favor of a dedicated OCR service. This is a temporary solution.
-    Uploads a file in memory to the Gemini API and extracts text.
+    Generates a JSON response from a multimodal request (text + images),
+    guaranteeing a parsable JSON object by using the Gemini API's JSON Mode.
     """
     try:
-        # The File API is a good approach for this.
+        model = genai.GenerativeModel(GEMINI_PRO_MODEL)
+        config = GenerationConfig(
+            temperature=0.1,
+            response_mime_type="application/json"
+        )
+        content = [prompt, *images]
+        response = await model.generate_content_async(content, generation_config=config)
+        if not response.text:
+            raise ValueError("AI model returned an empty response.")
+        return json.loads(response.text)
+    except Exception as e:
+        print(f"ERROR in generate_multimodal_json with Gemini API: {e}")
+        raise ValueError(f"Failed to get a valid JSON response from the multimodal AI. Error: {e}")
+
+async def process_file_with_vision(file_bytes: bytes, mime_type: str, prompt: str, temperature: float = 0.1) -> str:
+    """
+    Processes a file (PDF or image) using Gemini's vision capabilities.
+    The AI will OCR, analyze, and respond according to the prompt.
+    This replaces traditional OCR with AI vision for better handwriting recognition.
+    """
+    import tempfile
+    temp_file_path = None
+    try:
+        # Create a temporary file to upload to Gemini
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf' if 'pdf' in mime_type else '.png') as temp_file:
+            temp_file.write(file_bytes)
+            temp_file_path = temp_file.name
+
+        # Upload file to Gemini File API for processing
         uploaded_file = genai.upload_file(
-            contents=file_bytes,
-            display_name="ocr_temp_file",
+            path=temp_file_path,
+            display_name="vision_temp_file",
             mime_type=mime_type
         )
-        model = genai.GenerativeModel(GEMINI_FLASH_MODEL) # Using Flash for speed
-        response = await model.generate_content_async([GEMINI_OCR_PROMPT, uploaded_file])
+
+        model = genai.GenerativeModel(GEMINI_FLASH_MODEL)
+        config = GenerationConfig(temperature=temperature)
+
+        # Send both the prompt and the file to the AI
+        response = await model.generate_content_async(
+            [prompt, uploaded_file],
+            generation_config=config
+        )
+
+        if not response.text:
+            raise ValueError("AI model returned an empty response.")
+
         return response.text
     except Exception as e:
-        print(f"ERROR in ocr_file_with_gemini with API: {e}")
+        print(f"ERROR in process_file_with_vision: {e}")
         raise
+    finally:
+        # Clean up temporary file
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+            except Exception:
+                pass
+
+async def process_file_with_vision_json(file_bytes: bytes, mime_type: str, prompt: str, temperature: float = 0.1, log_context: str = "") -> Dict:
+    """
+    Processes a file (PDF or image) using Gemini's vision capabilities and returns JSON.
+    The AI will OCR, analyze, and structure the response as JSON according to the prompt.
+
+    Args:
+        file_bytes: The file content as bytes
+        mime_type: The MIME type of the file
+        prompt: The prompt to send to the AI
+        temperature: Temperature setting for the AI
+        log_context: Optional context string for token logging (e.g., "PARSE-QUESTION", "GRADE-STUDENT")
+
+    Returns:
+        Dict with two keys: 'data' (the parsed JSON) and 'tokens' (usage metadata)
+    """
+    import tempfile
+    temp_file_path = None
+    try:
+        # Create a temporary file to upload to Gemini
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf' if 'pdf' in mime_type else '.png') as temp_file:
+            temp_file.write(file_bytes)
+            temp_file_path = temp_file.name
+
+        # Upload file to Gemini File API for processing
+        uploaded_file = genai.upload_file(
+            path=temp_file_path,
+            display_name="vision_json_temp_file",
+            mime_type=mime_type
+        )
+
+        model = genai.GenerativeModel(GEMINI_FLASH_MODEL)
+        config = GenerationConfig(
+            temperature=temperature,
+            response_mime_type="application/json"
+        )
+
+        # Send both the prompt and the file to the AI with JSON mode
+        response = await model.generate_content_async(
+            [prompt, uploaded_file],
+            generation_config=config
+        )
+
+        if not response.text:
+            raise ValueError("AI model returned an empty response.")
+
+        # Extract token usage data
+        tokens_used = {
+            'prompt_tokens': 0,
+            'completion_tokens': 0,
+            'total_tokens': 0
+        }
+
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            tokens_used['prompt_tokens'] = getattr(response.usage_metadata, 'prompt_token_count', 0)
+            tokens_used['completion_tokens'] = getattr(response.usage_metadata, 'candidates_token_count', 0)
+            tokens_used['total_tokens'] = getattr(response.usage_metadata, 'total_token_count', 0)
+
+            # Log token usage
+            if log_context:
+                print(f"[TOKEN-USAGE] {log_context} - Prompt: {tokens_used['prompt_tokens']}, Completion: {tokens_used['completion_tokens']}, Total: {tokens_used['total_tokens']}")
+
+        return {
+            'data': json.loads(response.text),
+            'tokens': tokens_used
+        }
+    except Exception as e:
+        print(f"ERROR in process_file_with_vision_json: {e}")
+        raise ValueError(f"Failed to get a valid JSON response from the vision AI. Error: {e}")
+    finally:
+        # Clean up temporary file
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+            except Exception:
+                pass
     
 
 

@@ -125,20 +125,26 @@ def add_student_to_class_with_status(
     if not db.get_class_by_id(class_id, user_id):
         raise ValueError(f"Class with ID {class_id} not found or access denied.")
 
-    # This check remains global, which is the correct business logic.
-    # A student's official ID should be unique across the entire system.
+    # Check if student exists globally (studentId should be unique system-wide)
     existing_student = db.get_student_by_student_id(student_data.studentId)
+
     if existing_student:
-        print(f"INFO: Student with ID {student_data.studentId} already exists. Skipping creation.")
+        # Student exists - just add them to this class via membership
+        print(f"INFO: Student with ID {student_data.studentId} already exists. Adding to class.")
+        db.add_student_to_class(existing_student.id, class_id)
         return existing_student, False
 
+    # Create new student
     new_student_id = f"stu_{uuid.uuid4().hex[:12]}"
     new_student_record = student_data.model_dump()
     new_student_record['id'] = new_student_id
-    new_student_record['class_id'] = class_id
     new_student_record['overallGrade'] = 0
-    
+
     new_student_object = db.add_student(new_student_record)
+
+    # Add student to class via membership table
+    db.add_student_to_class(new_student_object.id, class_id)
+
     return new_student_object, True
 
 

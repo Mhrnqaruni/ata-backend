@@ -2,7 +2,8 @@
 
 # --- Core Imports ---
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime
 
 # --- Model Definitions ---
 
@@ -35,13 +36,13 @@ class Student(StudentBase):
     """
     The full representation of a Student resource, as it is stored in the
     database and returned by the API.
+    Note: class_id removed - students can now belong to multiple classes.
     """
     # --- [THE FIX IS HERE] ---
     model_config = ConfigDict(from_attributes=True)
     # --- [END OF FIX] ---
 
     id: str = Field(..., description="The unique, server-generated identifier for the student.")
-    class_id: str = Field(..., description="The ID of the class this student belongs to.")
     overallGrade: int = Field(
         default=0,
         description="The student's current overall grade. Defaults to 0 for new students."
@@ -50,3 +51,49 @@ class Student(StudentBase):
         default=None,
         description="An AI-generated summary of the student's performance (V2 feature)."
     )
+
+
+# --- Student Transcript Models ---
+
+class ClassInfo(BaseModel):
+    """Information about a class the student is enrolled in."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+
+
+class StudentAssessmentRow(BaseModel):
+    """Represents one assessment in a student's transcript."""
+    model_config = ConfigDict(from_attributes=True)
+
+    jobId: str = Field(..., description="The assessment ID")
+    assessmentName: str = Field(..., description="Name of the assessment")
+    classId: str = Field(..., description="ID of the class this assessment belongs to")
+    className: str = Field(..., description="Name of the class")
+    createdAt: Optional[str] = Field(None, description="Date the assessment was created (ISO format)")
+    totalScore: Optional[float] = Field(None, description="Student's total score")
+    maxTotalScore: float = Field(..., description="Maximum possible score")
+    status: str = Field(..., description="GRADED, PENDING_REVIEW, or ABSENT")
+    reportUrl: Optional[str] = Field(None, description="URL to download the report")
+
+
+class ClassTranscript(BaseModel):
+    """Transcript data for a single class."""
+    model_config = ConfigDict(from_attributes=True)
+
+    classId: str
+    className: str
+    averagePercent: Optional[float] = Field(None, description="Average grade in this class")
+    assessments: List[StudentAssessmentRow] = Field(default_factory=list)
+
+
+class StudentTranscriptResponse(BaseModel):
+    """Complete transcript response for a student across all classes."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    studentId: str
+    name: str
+    overallAveragePercent: Optional[float] = Field(None, description="Overall average across all classes")
+    classSummaries: List[ClassTranscript] = Field(default_factory=list, description="Per-class breakdown")

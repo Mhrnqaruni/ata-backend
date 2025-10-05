@@ -1,9 +1,13 @@
 # /ata-backend/app/models/assessment_model.py (DEFINITIVELY CORRECTED)
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional, List, Dict, Union, Any
+from typing import Optional, List, Dict, Union, Any, Literal
 from enum import Enum
 import uuid
+
+def to_camel(s: str) -> str:
+    parts = s.split('_')
+    return parts[0] + ''.join(p.capitalize() for p in parts[1:])
 
 # --- Core Enumerations ---
 class JobStatus(str, Enum):
@@ -97,6 +101,7 @@ class AssessmentJobSummary(BaseModel):
     id: str; assessmentName: str; className: str
     createdAt: str; status: JobStatus
     progress: Optional[Dict[str, int]] = None
+    totalPages: Optional[float] = None
 
 class AssessmentJobListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -107,3 +112,86 @@ class AssessmentConfigResponse(BaseModel):
     assessmentName: str
     questions: List[QuestionConfig]
     includeImprovementTips: bool
+
+# --- Models for Review Workflow ---
+
+class ReviewStatus(str, Enum):
+    AI_GRADED = "AI_GRADED"
+    PENDING_REVIEW = "PENDING_REVIEW"
+    TEACHER_GRADED = "TEACHER_GRADED"
+
+class FinalizedBy(str, Enum):
+    AI = "AI"
+    TEACHER = "TEACHER"
+
+class StudentAIGradedSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)
+    student_id: str
+    name: str
+    total_score: float
+
+class StudentPendingSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)
+    student_id: str
+    name: str
+    num_pending: int
+
+class AssessmentResultsOverviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)
+    job_id: str
+    assessment_name: str
+    status: JobStatus
+    students_ai_graded: List[StudentAIGradedSummary]
+    students_pending: List[StudentPendingSummary]
+    students: List['StudentResultRow'] = []
+
+class QuestionForReview(BaseModel):
+    model_config = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)
+    question_id: str
+    question_text: str
+    max_score: int
+    student_answer: Optional[str] = None
+    status: str
+    grade: Optional[float] = None
+    feedback: Optional[str] = None
+
+class StudentReviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)
+    job_id: str
+    student_id: str
+    student_name: str
+    assessment_name: str
+    config: AssessmentConfigV2
+    per_question: List[QuestionForReview]
+
+class QuestionSaveRequest(BaseModel):
+    grade: float
+    feedback: str
+
+class StudentSaveConfirmation(BaseModel):
+    model_config = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)
+    student_id: str
+    total_score: float
+    message: str = "Changes saved successfully."
+
+class CamelModel(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+class StudentResultRow(CamelModel):
+    entity_id: str  # The stable, unique DB ID for API calls
+    student_id: str # The display ID, which could be 'Outsider'
+    student_name: str
+    status: Literal["AI_GRADED", "PENDING_REVIEW", "TEACHER_GRADED", "ABSENT", "OUTSIDER"]
+    total_score: Optional[float] = None
+    max_total_score: Optional[float] = None
+    report_token: Optional[str] = None
+    is_outsider: bool = False
+    is_absent: bool = False
+
+class ScoreDistributionRequest(BaseModel):
+    config: AssessmentConfigV2
+    totalMarks: int

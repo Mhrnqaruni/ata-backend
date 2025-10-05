@@ -38,7 +38,8 @@ def get_user_by_email(db: Session, email: str) -> Optional[UserModel]:
     Returns:
         The SQLAlchemy UserModel object if a user is found, otherwise None.
     """
-    return db.query(UserModel).filter(UserModel.email == email).first()
+    # Normalize email to lowercase for case-insensitive comparison
+    return db.query(UserModel).filter(UserModel.email == email.lower()).first()
 
 
 def create_user(db: Session, user: UserCreate) -> UserModel:
@@ -75,12 +76,14 @@ def create_user(db: Session, user: UserCreate) -> UserModel:
     # Generate a secure hash of the user's password.
     # This is a critical security step. We never store the plain-text password.
     hashed_password = get_password_hash(user.password)
-    
+
     # Create a new SQLAlchemy UserModel instance.
     # We use `model_dump()` to convert the Pydantic model to a dictionary,
     # excluding the password which we are replacing with the hash.
+    # Normalize email to lowercase before storing
     db_user = UserModel(
-        **user.model_dump(exclude={"password"}),
+        **user.model_dump(exclude={"password", "email"}),
+        email=user.email.lower(),
         hashed_password=hashed_password
     )
     

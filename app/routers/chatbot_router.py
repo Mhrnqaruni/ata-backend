@@ -12,6 +12,9 @@ which is the standard practice for authenticating real-time connections.
 """
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Response, status, HTTPException, Query
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
 from typing import List
 import json
 
@@ -169,9 +172,9 @@ async def websocket_endpoint(
                     )
             
     except WebSocketDisconnect:
-        print(f"Client disconnected from chat session: {session_id}")
+        logger.info(f"Client disconnected from chat session: {session_id}")
     except Exception as e:
-        print(f"An unexpected error occurred in WebSocket for session {session_id}: {e}")
+        logger.info(f"An unexpected error occurred in WebSocket for session {session_id}: {e}")
         try:
             await websocket.send_json({
                 "type": "error", 

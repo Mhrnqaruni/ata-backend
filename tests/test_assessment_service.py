@@ -77,10 +77,10 @@ async def test_grade_submission_with_library_source(
     assessment_svc = AssessmentService(db=mock_db_service)
 
     # 2. EXECUTION
-    await assessment_svc._grade_entire_submission_for_student(
-        job_id="job_test_123", student_id="stu_test_456",
+    await assessment_svc._grade_entire_submission_for_entity(
+        job_id="job_test_123", entity_id="stu_test_456", is_outsider=False,
         answer_sheet_path="/fake/path.pdf", content_type="application/pdf",
-        config=v2_config_for_library_test
+        config=v2_config_for_library_test, user_id="user_test_123"
     )
 
     # 3. ASSERTION

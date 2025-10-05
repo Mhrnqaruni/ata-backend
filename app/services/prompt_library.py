@@ -513,6 +513,88 @@ Analyze the provided image(s) now and generate the transcribed answer text.
 """
 
 
+# --- [NEW PROMPT FOR OUTSIDER NAME EXTRACTION] ---
+NAME_EXTRACTION_PROMPT = """
+You are a highly specialized data extraction AI. Your sole purpose is to find and extract the full name of a person from a given block of text, which is from an OCR scan of a student's answer sheet.
+
+**--- PRIMARY DIRECTIVE & RULES ---**
+
+1.  **YOUR GOAL:** Find the student's name. It is likely located at the top of the text.
+2.  **BE PRECISE:** Extract the full name (e.g., "John Smith"). Do not extract other text like "Name:", "Date:", student IDs, or course names.
+3.  **CRITICAL OUTPUT FORMAT:** Your entire response MUST be a single, valid JSON object. The JSON object must have exactly one key: `"studentName"`. The value should be the extracted name as a string.
+4.  **IF NAME IS NOT FOUND:** If you cannot confidently identify a name in the text, you MUST return a JSON object where the value for "studentName" is `null`.
+
+**--- TEXT TO ANALYZE ---**
+{text_block}
+---
+
+**--- EXAMPLE 1 ---**
+INPUT TEXT: "Name: Jane Doe Student ID: 12345 Subject: History"
+OUTPUT JSON:
+{{
+  "studentName": "Jane Doe"
+}}
+
+**--- EXAMPLE 2 ---**
+INPUT TEXT: "Introduction to Biology This paper is the property of the school."
+OUTPUT JSON:
+{{
+  "studentName": null
+}}
+
+**--- REQUIRED OUTPUT (VALID JSON OBJECT ONLY) ---**
+
+Analyze the provided text and generate the JSON output now.
+"""
+
+
+# --- [NEW PROMPT FOR MULTIMODAL OUTSIDER NAME EXTRACTION] ---
+MULTIMODAL_NAME_EXTRACTION_PROMPT = """
+You are a highly specialized data extraction AI. Your sole purpose is to find and extract the full name of a person from the provided IMAGE of a student's answer sheet.
+
+**--- PRIMARY DIRECTIVE & RULES ---**
+
+1.  **YOUR GOAL:** Find the student's name in the IMAGE. It is likely located at the top of the first page.
+2.  **IMAGE IS THE ONLY TRUTH:** Base your analysis exclusively on the visual information in the image.
+3.  **BE PRECISE:** Extract only the full name (e.g., "John Smith"). Do not extract other text like "Name:", "Date:", student IDs, or course names.
+4.  **CRITICAL OUTPUT FORMAT:** Your entire response MUST be a single, valid JSON object. The JSON object must have exactly one key: `"studentName"`. The value should be the extracted name as a string.
+5.  **IF NAME IS NOT FOUND:** If you cannot confidently identify a name in the image, you MUST return a JSON object where the value for "studentName" is `null`.
+
+**--- REQUIRED OUTPUT (VALID JSON OBJECT ONLY) ---**
+
+Analyze the provided image and generate the JSON output now.
+"""
+
+
+# --- [NEW PROMPT FOR AI SCORE DISTRIBUTION] ---
+AI_SCORE_DISTRIBUTION_PROMPT = """
+You are an expert curriculum designer and assessment specialist. Your task is to analyze a list of assessment questions and intelligently distribute a total score among them.
+
+**--- PRIMARY DIRECTIVE & RULES ---**
+
+1.  **YOUR GOAL:** You are given a list of questions in a JSON object and a `totalMarks` for the entire assessment. You MUST assign a `maxScore` to each question.
+2.  **INTELLIGENT DISTRIBUTION:** You must not simply divide the total marks evenly. Analyze the text of each question to infer its complexity, the cognitive effort required, and its likely importance.
+    *   Assign more marks to questions that require detailed explanations, multi-step problem-solving, or synthesis of multiple concepts.
+    *   Assign fewer marks to simple recall questions (e.g., definitions, single-word answers).
+3.  **SUM MUST MATCH:** The sum of all `maxScore` values you assign MUST equal the provided `totalMarks`. This is a critical mathematical constraint.
+4.  **INTEGER SCORES:** All assigned `maxScore` values must be integers.
+5.  **CRITICAL OUTPUT FORMAT:** Your entire response MUST be a single, valid JSON object. Do not include any introductory text or wrap the JSON in markdown backticks.
+6.  **CRITICAL JSON STRUCTURE:** The JSON object you return MUST have the exact same structure as the input JSON object you receive, with only the `maxScore` values updated.
+
+**--- TASK CONTEXT ---**
+
+*   **Total Marks to Distribute:** `{total_marks}`
+*   **Assessment Questions JSON:**
+    ```json
+    {questions_json}
+    ```
+
+**--- REQUIRED OUTPUT (VALID JSON OBJECT ONLY) ---**
+
+Analyze the questions and return the complete JSON object with the `maxScore` for each question updated.
+"""
+
+
 
 
 
@@ -532,11 +614,16 @@ You are a highly experienced and objective Teaching Assistant. Your sole purpose
 3.  **GRADE ALL QUESTIONS:** You must provide a grade and feedback for every question listed in the "Questions and Rubrics" array.
 4.  **PRODUCE HELPFUL FEEDBACK:** For each question, your feedback must be constructive and reference its specific rubric and the answer key context.
 5.  **CRITICAL OUTPUT FORMAT:** Your entire output MUST be a single, valid JSON object. Do not include any text before or after it.
-6.  **CRITICAL JSON STRUCTURE:** The JSON object must have one key: `"results"`. The value must be an array of objects. Each object in the array MUST have three keys:
+6.  **CRITICAL JSON STRUCTURE:** The JSON object must have one key: `"results"`. The value must be an array of objects. Each object in the array MUST have four keys:
     *   `"question_id"` (string): The ID of the question from the input.
-    *   `"grade"` (number): The final numerical score for that question.
+    *   `"extractedAnswer"` (string): The verbatim student answer you found in the images. If you cannot find an answer for the question, this MUST be an empty string "".
+    *   `"grade"` (number): The final numerical score for that question. If `extractedAnswer` is empty, the grade MUST be 0.
     *   `"feedback"` (string): The detailed, rubric-based feedback for that question.
-8. if for a question, the answer is totally wrong, give it 0, if its half wrong give the half of the score(in default be 50) and if its partially correct give 1/4 or 3/4 of full score based on correctness and wrongness. be like a very good teacter that take care of eveything in details
+7.  **GRADING RULES:**
+    *   If you cannot locate an answer for a question in the student images, set `extractedAnswer` to `""`, `grade` to `0`, and the `feedback` to "No answer detected for this question."
+    *   If an answer is present but completely incorrect, grade it as 0.
+    *   For partially correct answers, assign a grade proportional to the correctness. Be a fair and detailed grader.
+    *   Do NOT infer or assume an answer from the question text or the answer key. Grade only what is written.
 
 **--- ASSESSMENT MATERIALS ---**
 
@@ -578,15 +665,18 @@ You are an expert in educational materials and document analysis. Your task is t
     *   If the "Answer Key Document Text" is provided, you MUST populate the `"answer"` field in your JSON output with the text you find.
     *   **CRITICAL RUBRIC RULE:** If the "Answer Key Document Text" is provided, you MUST also copy the extracted answer into the `"rubric"` field for that question. This provides a clear guide for the teacher.
     *   If the "Answer Key Document Text" is empty or not provided, you must attempt to extract both answers and rubrics from the "Question Document Text" itself. If no rubric is found, use an empty string.
-# --- [END OF FIX] ---
 
-4.  **SCORING METHOD & OTHER FIELDS:** You must infer the scoring method, sections, questions (with text, rubric, maxScore), and answers, and format them into the required JSON structure.
-5.  **CRITICAL OUTPUT FORMAT:** Your entire response MUST be a single, valid JSON object. Do not include any introductory text, concluding remarks, or wrap the JSON in markdown backticks.
-6.  **CRITICAL JSON STRUCTURE:** You MUST adhere to the following JSON schema with EXACTLY these key names:
+4.  **[NEW] MAX SCORE EXTRACTION:**
+    *   For each question, you MUST search for an explicit mark allocation (e.g., "[10 marks]", "(5 pts)", "10m").
+    *   If you find a mark, you MUST populate the `"maxScore"` field with that number.
+    *   If you CANNOT find an explicit mark for a question, you MUST set `"maxScore"` to `null`. Do not default to 100 or any other number.
+
+5.  **SCORING METHOD & OTHER FIELDS:** You must infer the scoring method, sections, questions (with text, rubric, maxScore), and answers, and format them into the required JSON structure.
+6.  **CRITICAL OUTPUT FORMAT:** Your entire response MUST be a single, valid JSON object. Do not include any introductory text, concluding remarks, or wrap the JSON in markdown backticks.
+7.  **CRITICAL JSON STRUCTURE:** You MUST adhere to the following JSON schema with EXACTLY these key names:
     - The root object must have a `scoringMethod`, `totalScore`, `sections`, and `includeImprovementTips`.
     - Each object in the `sections` array must have a `title`, `total_score`, and `questions`.
     - Each object in the `questions` array MUST have the keys: `"text"`, `"rubric"`, `"maxScore"`, `"answer"`.
-7. for all the question by default put the max score 100 
 
 **--- EXAMPLE OF REQUIRED JSON OUTPUT STRUCTURE ---**
 {{
@@ -690,4 +780,168 @@ The following is the history of your current conversation with the teacher. Use 
 {user_message}
 
 **--- YOUR RESPONSE (Natural Language Only) ---**
+"""
+
+
+# === VISION-OPTIMIZED PROMPTS (NO OCR PRE-PROCESSING) ===
+
+VISION_DOCUMENT_PARSING_PROMPT = """
+You are an expert educational document analyzer with advanced vision and OCR capabilities. Your task is to analyze the provided assessment document files using your vision abilities and structure them into a specific JSON format.
+
+**--- YOUR VISION CAPABILITIES ---**
+
+You can:
+1. **OCR ALL TEXT**: Extract both typed and handwritten text with high accuracy
+2. **ANALYZE LAYOUT**: Understand document structure, sections, and formatting
+3. **READ EQUATIONS**: Recognize mathematical notation and formulas
+4. **DETECT DIAGRAMS**: Identify graphs, charts, and visual elements
+5. **HANDLE MULTI-PAGE**: Process multiple pages in PDF documents
+
+**--- PRIMARY TASK ---**
+
+You will receive TWO files:
+1. **Question Document**: Contains the assessment questions
+2. **Answer Key Document** (optional): Contains the correct answers
+
+**--- RULES & INSTRUCTIONS ---**
+
+1. **FIRST**: Use your vision to carefully OCR and read ALL text from the Question Document
+2. **IDENTIFY STRUCTURE**: Detect sections, question numbers, and any organizational structure
+3. **EXTRACT QUESTIONS**: For each question, extract:
+   - The question text (including any sub-parts)
+   - The marking allocation (e.g., "[10 marks]", "(5 pts)") - set to `maxScore`
+   - If found in the Question Document, extract the answer/rubric
+4. **IF ANSWER KEY PROVIDED**:
+   - OCR the Answer Key Document
+   - Match answers to questions by number
+   - Copy the answer into both `"answer"` AND `"rubric"` fields
+5. **HANDLE HANDWRITING**: If the documents contain handwritten text, carefully transcribe it
+6. **EQUATIONS & DIAGRAMS**: If questions reference diagrams or contain equations, note them in the question text
+7. **MAX SCORE RULE**:
+   - Only set `maxScore` if you find an explicit mark allocation
+   - If no marks specified, set `maxScore` to `null`
+8. **OUTPUT FORMAT**: Return ONLY a valid JSON object (no markdown, no explanations)
+
+**--- REQUIRED JSON STRUCTURE ---**
+
+CRITICAL: The "title" field in sections is REQUIRED and must ALWAYS be a non-null string. If no section title is visible in the document, use "Main Section" as the default.
+
+{{
+  "scoringMethod": "per_question",
+  "totalScore": null,
+  "sections": [
+    {{
+      "title": "Main Section",
+      "total_score": null,
+      "questions": [
+        {{
+          "text": "The full question text",
+          "rubric": "The marking rubric or model answer",
+          "maxScore": 10,
+          "answer": "The correct answer"
+        }}
+      ]
+    }}
+  ],
+  "includeImprovementTips": false
+}}
+
+**--- IMPORTANT NOTES ---**
+
+- Trust your vision - the files you're analyzing are the source of truth
+- For handwritten content, transcribe carefully
+- Maintain the original question numbering and structure
+- If uncertain about handwriting, transcribe your best interpretation
+- **CRITICAL**: The "title" field must NEVER be null - use "Main Section" if no title is found
+
+**--- NOW ANALYZE THE FILES ---**
+
+Please analyze the provided files and generate the structured JSON output.
+"""
+
+
+VISION_ANSWER_GRADING_PROMPT = """
+You are an expert grading assistant with advanced vision and OCR capabilities. Your task is to analyze a student's handwritten answer sheet and grade it according to the provided rubric.
+
+**--- YOUR VISION CAPABILITIES ---**
+
+You can:
+1. **READ HANDWRITING**: Accurately OCR handwritten student responses
+2. **DETECT DIAGRAMS**: Analyze student-drawn graphs, charts, and diagrams
+3. **READ EQUATIONS**: Understand mathematical notation and formulas
+4. **SPATIAL AWARENESS**: Understand layout, arrows, annotations
+5. **MULTI-MODAL ANALYSIS**: Combine text, visual, and spatial information
+
+**--- GRADING TASK ---**
+
+Question: {question_text}
+
+Rubric/Model Answer: {rubric}
+
+Maximum Score: {max_score}
+
+**--- INSTRUCTIONS ---**
+
+1. **FIRST**: Use your vision to carefully OCR the student's handwritten answer from the image
+2. **EXTRACT ANSWER**: Transcribe exactly what the student wrote (including diagrams if relevant)
+3. **ANALYZE CONTENT**: Compare the student's answer against the rubric
+4. **CONSIDER VISUAL ELEMENTS**: If the question involves diagrams/graphs, analyze those too
+5. **ASSIGN GRADE**: Determine the appropriate score (0 to {max_score})
+6. **PROVIDE FEEDBACK**: Write constructive feedback explaining the grade
+
+**--- GRADING CRITERIA ---**
+
+- Full marks: Answer fully matches the rubric/model answer
+- Partial credit: Answer is partially correct or shows understanding
+- Zero marks: Answer is incorrect, missing, or shows fundamental misunderstanding
+- For diagrams: Check accuracy, labels, and completeness
+
+**--- HANDLE HANDWRITING CAREFULLY ---**
+
+- If handwriting is unclear, make your best interpretation
+- Don't penalize for poor handwriting if the content is correct
+- If completely illegible, note this in feedback and assign zero
+
+**--- OUTPUT FORMAT (JSON ONLY) ---**
+
+{{
+  "extracted_answer": "The student's answer as you read it from the image",
+  "grade": 8,
+  "feedback": "Your constructive feedback explaining the grade",
+  "confidence": "high"
+}}
+
+**--- NOW GRADE THE ANSWER ---**
+
+Please analyze the provided answer sheet image and generate your grading response.
+"""
+
+# --- Vision-based Name Extraction Prompt ---
+VISION_NAME_EXTRACTION_PROMPT = """
+You are an expert at reading handwritten documents and extracting student information. Your task is to analyze a student's answer sheet and extract the student's name.
+
+**--- YOUR TASK ---**
+
+1. **LOOK FOR THE NAME**: Carefully examine the provided document image
+2. **FIND STUDENT NAME**: Look for the student's name, typically at the top of the page
+3. **READ HANDWRITING**: Use your OCR capabilities to accurately read handwritten text
+4. **EXTRACT FULL NAME**: Return the complete student name as written
+
+**--- INSTRUCTIONS ---**
+
+- Look at the top portion of the answer sheet where students typically write their names
+- The name might be in a "Name:" field or similar
+- Return the FULL name as you see it (e.g., "John Smith", not just "John")
+- If you cannot find a name, return an empty string
+- Do not make up a name if you cannot find one
+
+**--- OUTPUT FORMAT (JSON ONLY) ---**
+
+{{
+  "studentName": "The full name as you read it from the image"
+}}
+
+**--- NOW EXTRACT THE NAME ---**
+
+Please analyze the provided answer sheet image and extract the student name.
 """

@@ -20,21 +20,24 @@ from contextlib import asynccontextmanager
 # --- Application-specific Router Imports ---
 # Import all router objects that define the various API endpoint groups.
 from .routers import (
-    classes_router, 
-    assessments_router, 
-    tools_router, 
-    chatbot_router, 
-    dashboard_router, 
+    classes_router,
+    assessments_router,
+    assessment_review_router,
+    tools_router,
+    chatbot_router,
+    dashboard_router,
     library_router,
     history_router,
     public_router,
-    # --- [CRITICAL MODIFICATION 1/2: IMPORT THE NEW AUTH ROUTER] ---
-    # This import makes our new authentication endpoints available to the main app.
-    auth_router
+    auth_router,
+    students_router,
+    page_count_router,
+    admin_router
 )
 
 # --- Service Imports for Startup Logic ---
 from .services import library_service
+from .core import scheduler
 
 # --- Application Lifecycle Management ---
 @asynccontextmanager
@@ -46,10 +49,16 @@ async def lifespan(app: FastAPI):
     print("INFO:     Application startup: Initializing library cache...")
     library_service.initialize_library_cache()
     print("INFO:     Library cache initialized.")
-    
+
+    print("INFO:     Starting background scheduler...")
+    scheduler.start_scheduler()
+    print("INFO:     Background scheduler started.")
+
     yield  # The application runs while the context manager is active.
-    
+
     # This code runs ONCE when the application shuts down.
+    print("INFO:     Stopping background scheduler...")
+    scheduler.stop_scheduler()
     print("INFO:     Application shutdown.")
 
 # --- FastAPI Application Instance Creation ---
@@ -72,6 +81,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],  # Allow frontend to read this header for file downloads
 )
 
 # --- API Router Inclusion ---
@@ -82,16 +92,22 @@ app.add_middleware(
 # They are placed first as they are the entry point for users.
 app.include_router(auth_router.router, prefix="/api/auth", tags=["Authentication"])
 
+# --- Admin Routes (Super Admin Only) ---
+app.include_router(admin_router.router, prefix="/api/admin", tags=["Admin"])
+
 # --- Protected API Routes (Require Authentication) ---
 # All core business logic endpoints are grouped here. They are all protected
 # by the `get_current_active_user` dependency defined within their respective files.
 app.include_router(dashboard_router.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(classes_router.router, prefix="/api/classes", tags=["Classes & Students"])
+app.include_router(students_router.router, prefix="/api/students", tags=["Students"])
+app.include_router(assessment_review_router.router, prefix="/api/assessments", tags=["Assessments Review"])
 app.include_router(assessments_router.router, prefix="/api/assessments", tags=["Assessments"])
 app.include_router(tools_router.router, prefix="/api/tools", tags=["AI Tools"])
 app.include_router(chatbot_router.router, prefix="/api/chatbot", tags=["Chatbot"])
 app.include_router(library_router.router, prefix="/api/library", tags=["Curriculum Library"])
 app.include_router(history_router.router, prefix="/api/history", tags=["Generation History"])
+app.include_router(page_count_router.router, prefix="/api/page-count", tags=["Page Counting"])
 
 # --- Publicly Accessible Routes (Do Not Require User Login) ---
 # These routes are for resources that are intentionally public, like shareable reports.

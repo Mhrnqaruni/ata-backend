@@ -74,10 +74,11 @@ def test_create_initial_job_records_v1(mock_db_service, v1_config):
     THEN:  It should create exactly 1 job record and 6 result records (3 students * 2 questions).
     """
     job_id = "job_v1_test"
+    user_id = "user_v1_test"
     answer_sheet_data = [{"path": "/fake/path.pdf", "contentType": "application/pdf"}]
 
     # Call the function we are testing
-    job_creation._create_initial_job_records(mock_db_service, job_id, v1_config, answer_sheet_data)
+    job_creation._create_initial_job_records(mock_db_service, job_id, v1_config, answer_sheet_data, user_id)
 
     # Assert that the main job was created exactly once
     mock_db_service.add_assessment_job.assert_called_once()
@@ -100,10 +101,11 @@ def test_create_initial_job_records_v2(mock_db_service_v2, v2_config):
     THEN:  It should create exactly 1 job record and 12 result records (4 students * 3 questions).
     """
     job_id = "job_v2_test"
+    user_id = "user_v2_test"
     answer_sheet_data = [{"path": "/fake/path.docx", "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}]
 
     # Call the function we are testing
-    job_creation._create_initial_job_records_v2(mock_db_service_v2, job_id, v2_config, answer_sheet_data)
+    job_creation._create_initial_job_records_v2(mock_db_service_v2, job_id, v2_config, answer_sheet_data, user_id)
 
     # Assert that the main job was created exactly once
     mock_db_service_v2.add_assessment_job.assert_called_once()

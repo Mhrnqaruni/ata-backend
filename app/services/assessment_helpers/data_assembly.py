@@ -32,13 +32,17 @@ def _assemble_job_summaries(all_jobs: List['Assessment'], all_results: List['Res
 
     for job in all_jobs:
         # Start with a basic, default summary. This will be shown even if parsing fails.
+        total_pages_value = job.total_pages if hasattr(job, 'total_pages') and job.total_pages else 0
+        print(f"📄 [DATA ASSEMBLY] Job {job.id}: total_pages = {total_pages_value}, status = {job.status}")
+
         summary = {
             "id": job.id,
             "assessmentName": "Assessment (Processing Error)", # A clear default name
             "className": "Unknown Class",
             "createdAt": job.created_at.isoformat() if job.created_at else "",
             "status": job.status,
-            "progress": {"total": 0, "processed": 0}
+            "progress": {"total": 0, "processed": 0},
+            "totalPages": total_pages_value
         }
         
         try:
@@ -61,8 +65,10 @@ def _assemble_job_summaries(all_jobs: List['Assessment'], all_results: List['Res
             # with the correct ID and "Failed" status, so it will appear in the UI.
             print(f"Could not fully parse summary for job {job.id}, showing basic info. Error: {e}")
 
+        print(f"🔎 [DATA ASSEMBLY] Final summary for {job.id}: {summary}")
         summaries.append(summary)
-    
+
+    print(f"📤 [DATA ASSEMBLY] Returning {len(summaries)} summaries")
     return summaries
 # --- [END OF THE NEW FUNCTION] ---
 

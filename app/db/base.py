@@ -20,6 +20,7 @@ from .base_class import Base
 # Import all existing models to register them with the Base metadata.
 from .models.class_student_models import Class, Student
 from .models.assessment_models import Assessment, Result
+from .models.ai_model_run import AIModelRun
 from .models.chat_models import ChatSession, ChatMessage
 from .models.generation_models import Generation
 

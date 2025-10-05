@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 # Import the SQLAlchemy models this repository will interact with.
 from app.db.models.class_student_models import Class, Student
 from app.db.models.user_model import User
+from app.db.models.outsider_student import OutsiderStudent
 
 
 class ClassStudentRepositorySQL:
@@ -102,15 +103,22 @@ class ClassStudentRepositorySQL:
         Retrieves all students for a given class, but only if the class is
         owned by the specified user. This is a critical defense-in-depth check.
         """
+        from app.db.models.class_student_models import StudentClassMembership
+
         # First, verify that the user owns the parent class.
         parent_class = self.get_class_by_id(class_id=class_id, user_id=user_id)
         if not parent_class:
             # If the user does not own the class, return an empty list,
             # effectively hiding the students from unauthorized access.
             return []
-        
-        # Only if ownership is confirmed, proceed to fetch the students.
-        return self.db.query(Student).filter(Student.class_id == class_id).all()
+
+        # Fetch students through the junction table
+        return (
+            self.db.query(Student)
+            .join(StudentClassMembership, Student.id == StudentClassMembership.student_id)
+            .filter(StudentClassMembership.class_id == class_id)
+            .all()
+        )
 
     def add_student(self, record: Dict) -> Student:
         """
@@ -130,15 +138,17 @@ class ClassStudentRepositorySQL:
         Updates a student's details, but only if the student belongs to a class
         owned by the specified user.
         """
-        # This query joins Student with Class to enforce ownership at the database level.
-        # It will only find the student if their parent class's user_id matches.
+        from app.db.models.class_student_models import StudentClassMembership
+
+        # This query joins Student with Class through membership to enforce ownership
         db_student = (
             self.db.query(Student)
-            .join(Class, Student.class_id == Class.id)
+            .join(StudentClassMembership, Student.id == StudentClassMembership.student_id)
+            .join(Class, StudentClassMembership.class_id == Class.id)
             .filter(Student.id == student_id, Class.user_id == user_id)
             .first()
         )
-        
+
         if db_student:
             for key, value in data.items():
                 if key == 'overallGrade' and value is not None:
@@ -153,10 +163,13 @@ class ClassStudentRepositorySQL:
         Deletes a student, but only if the student belongs to a class owned by
         the specified user. This method is now independently secure.
         """
+        from app.db.models.class_student_models import StudentClassMembership
+
         # Securely fetch the student using a join to verify ownership.
         db_student = (
             self.db.query(Student)
-            .join(Class, Student.class_id == Class.id)
+            .join(StudentClassMembership, Student.id == StudentClassMembership.student_id)
+            .join(Class, StudentClassMembership.class_id == Class.id)
             .filter(Student.id == student_id, Class.user_id == user_id)
             .first()
         )
@@ -165,6 +178,14 @@ class ClassStudentRepositorySQL:
             self.db.commit()
             return True
         return False
+
+    def add_outsider_student(self, record: Dict) -> OutsiderStudent:
+        """Creates a new OutsiderStudent record in the database."""
+        new_outsider = OutsiderStudent(**record)
+        self.db.add(new_outsider)
+        self.db.commit()
+        self.db.refresh(new_outsider)
+        return new_outsider
         
     def get_student_by_student_id(self, student_id: str) -> Optional[Student]:
         """
@@ -173,6 +194,21 @@ class ClassStudentRepositorySQL:
         across the entire system.
         """
         return self.db.query(Student).filter(Student.studentId == student_id).first()
+
+    def get_student_by_id(self, student_id: str, user_id: str) -> Optional[Student]:
+        """
+        Securely fetches a single student by their primary key ID, ensuring they
+        belong to a class owned by the specified user.
+        """
+        from app.db.models.class_student_models import StudentClassMembership
+
+        return (
+            self.db.query(Student)
+            .join(StudentClassMembership, Student.id == StudentClassMembership.student_id)
+            .join(Class, StudentClassMembership.class_id == Class.id)
+            .filter(Student.id == student_id, Class.user_id == user_id)
+            .first()
+        )
 
     # --- Chatbot Helper Methods ---
 
@@ -190,10 +226,93 @@ class ClassStudentRepositorySQL:
         securely filtered for the authenticated user.
         """
         # This query joins students with their parent class to filter by the owner.
+        from app.db.models.class_student_models import StudentClassMembership
+
         user_students = (
             self.db.query(Student)
-            .join(Class, Student.class_id == Class.id)
+            .join(StudentClassMembership, Student.id == StudentClassMembership.student_id)
+            .join(Class, StudentClassMembership.class_id == Class.id)
             .filter(Class.user_id == user_id)
+            .distinct()
             .all()
         )
         return [{c.name: getattr(obj, c.name) for c in obj.__table__.columns} for obj in user_students]
+
+    # --- NEW: Student Membership Methods ---
+
+    def get_class_memberships_for_student(self, student_id: str, user_id: str) -> List:
+        """
+        Returns all class memberships for a student, along with class details.
+        Only returns classes owned by the specified user.
+        """
+        from app.db.models.class_student_models import StudentClassMembership
+
+        memberships = (
+            self.db.query(StudentClassMembership, Class)
+            .join(Class, StudentClassMembership.class_id == Class.id)
+            .filter(
+                StudentClassMembership.student_id == student_id,
+                Class.user_id == user_id
+            )
+            .all()
+        )
+
+        # Return list of objects with membership and class data
+        result = []
+        for membership, class_obj in memberships:
+            result.append(type('obj', (object,), {
+                'student_id': membership.student_id,
+                'class_id': membership.class_id,
+                'class_name': class_obj.name
+            })())
+
+        return result
+
+    def add_student_to_class(self, student_id: str, class_id: str) -> bool:
+        """
+        Adds a student to a class via the membership table.
+        Returns True if successful, False if already exists.
+        """
+        from app.db.models.class_student_models import StudentClassMembership
+        import uuid
+
+        # Check if membership already exists
+        existing = (
+            self.db.query(StudentClassMembership)
+            .filter_by(student_id=student_id, class_id=class_id)
+            .first()
+        )
+
+        if existing:
+            return False
+
+        # Create new membership
+        membership = StudentClassMembership(
+            id=f"scm_{uuid.uuid4().hex[:16]}",
+            student_id=student_id,
+            class_id=class_id
+        )
+
+        self.db.add(membership)
+        self.db.commit()
+        return True
+
+    def remove_student_from_class(self, student_id: str, class_id: str) -> bool:
+        """
+        Removes a student from a class.
+        Returns True if successful, False if not found.
+        """
+        from app.db.models.class_student_models import StudentClassMembership
+
+        membership = (
+            self.db.query(StudentClassMembership)
+            .filter_by(student_id=student_id, class_id=class_id)
+            .first()
+        )
+
+        if not membership:
+            return False
+
+        self.db.delete(membership)
+        self.db.commit()
+        return True

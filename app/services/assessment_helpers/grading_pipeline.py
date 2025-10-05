@@ -1,4 +1,4 @@
-# /app/services/assessment_helpers/grading_pipeline.py
+# /app/services/assessment_helpers/grading_pipeline.py (VISION-OPTIMIZED)
 
 import io
 import json
@@ -22,6 +22,7 @@ def _prepare_images_from_answersheet(answer_sheet_path: str, content_type: str) 
     """
     Specialist for file ingestion.
     Reads a file from disk and converts it into a list of PIL Images, handling PDF conversion.
+    KEPT FOR COMPATIBILITY: This is still used for name extraction in analytics_and_matching.py
     """
     with open(answer_sheet_path, "rb") as f:
         file_bytes = f.read()
@@ -40,42 +41,46 @@ def _prepare_images_from_answersheet(answer_sheet_path: str, content_type: str) 
 
     if not image_list:
         raise ValueError(f"Could not extract any images from the file: {answer_sheet_path}")
-    
+
     return image_list
 
-async def _invoke_grading_ai(prompt: str, images: List[Image.Image]) -> str:
+async def _invoke_grading_ai_vision(
+    file_bytes: bytes,
+    mime_type: str,
+    prompt: str
+) -> Dict:
     """
-    Specialist for AI interaction.
-    Calls the gemini_service to get the AI's grading response.
+    Vision-optimized AI grading function.
+    Uses Gemini File API with vision capabilities to grade a single question.
+    Returns structured JSON with extracted_answer, grade, and feedback.
     """
-    return await gemini_service.generate_multimodal_response(prompt, images)
+    return await gemini_service.process_file_with_vision_json(
+        file_bytes=file_bytes,
+        mime_type=mime_type,
+        prompt=prompt,
+        temperature=0.1
+    )
 
-def _parse_ai_grading_response(ai_response_str: str) -> Dict:
+def _save_single_grading_result_to_db(
+    db: DatabaseService,
+    job_id: str,
+    student_id: str,
+    question_id: str,
+    grading_result: Dict
+):
     """
-    Specialist for response parsing.
-    Defensively finds and parses the JSON object from the AI's raw string response.
+    Specialist for persistence - saves a single question's grading result.
     """
-    start_index = ai_response_str.find('{')
-    end_index = ai_response_str.rfind('}') + 1
-    if start_index == -1 or end_index == 0:
-        raise json.JSONDecodeError("No JSON object found in AI response", ai_response_str, 0)
-    
-    return json.loads(ai_response_str[start_index:end_index])
+    clean_grade = _safe_float_convert(grading_result.get('grade'))
+    clean_feedback = grading_result.get('feedback', 'No feedback provided.')
+    extracted_answer = grading_result.get('extracted_answer', '')
 
-def _save_grading_results_to_db(db: DatabaseService, job_id: str, student_id: str, parsed_results: Dict):
-    """
-    Specialist for persistence.
-    Loops through the parsed AI results, cleans the data, and saves it to the database.
-    """
-    for result in parsed_results['results']:
-        clean_grade = _safe_float_convert(result.get('grade'))
-        clean_feedback = result.get('feedback', 'No feedback provided.')
-        
-        db.update_student_result_with_grade(
-            job_id=job_id,
-            student_id=student_id,
-            question_id=result['question_id'],
-            grade=clean_grade,
-            feedback=clean_feedback,
-            status="ai_graded"
-        )
+    db.update_student_result_with_grade(
+        job_id=job_id,
+        student_id=student_id,
+        question_id=question_id,
+        grade=clean_grade,
+        feedback=clean_feedback,
+        extracted_answer=extracted_answer,
+        status="ai_graded"
+    )

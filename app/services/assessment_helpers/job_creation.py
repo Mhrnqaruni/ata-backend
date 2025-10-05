@@ -89,27 +89,18 @@ def _create_initial_job_records(
     }
     db.add_assessment_job(job_record)
     
-    # Securely fetch the students for the specified class, ensuring the class
-    # belongs to the current user. This prevents creating results for another user's students.
-    class_students = db.get_students_by_class_id(class_id=config.classId, user_id=user_id)
-    
-    for student in class_students:
-        for question in config.questions:
-            result_id = f"res_{uuid.uuid4().hex[:16]}"
-            unique_token = f"tok_{uuid.uuid4().hex}"
-            db.save_student_grade_result({
-                "id": result_id, "job_id": job_id, "student_id": student.id,
-                "question_id": question.id, "grade": None, "feedback": None,
-                "extractedAnswer": None, "status": "pending_match",
-                "report_token": unique_token, "answer_sheet_path": "", "content_type": ""
-            })
+    # The logic for creating placeholder results for every student has been removed.
+    # Result records will now be created only after a file has been successfully
+    # matched to a student in the analytics_and_matching helper.
+    pass
 
 def _create_initial_job_records_v2(
-    db: DatabaseService, 
-    job_id: str, 
-    config: assessment_model.AssessmentConfigV2, 
+    db: DatabaseService,
+    job_id: str,
+    config: assessment_model.AssessmentConfigV2,
     answer_sheet_data: List[Dict],
-    user_id: str
+    user_id: str,
+    total_pages: int = 0
 ):
     """
     Specialist for creating the database records for a V2 assessment job.
@@ -123,6 +114,7 @@ def _create_initial_job_records_v2(
         config: The Pydantic model containing the V2 assessment configuration.
         answer_sheet_data: A list of dictionaries with file path and content type info.
         user_id: The unique ID of the user who owns this new assessment.
+        total_pages: Total number of pages across all student submissions.
     """
     job_record = {
         "id": job_id,
@@ -131,22 +123,12 @@ def _create_initial_job_records_v2(
         "answer_sheet_paths": answer_sheet_data,
         "user_id": user_id,  # Stamp the owner's ID onto the new record.
         "created_at": datetime.datetime.now(datetime.timezone.utc),
-        "ai_summary": ""
+        "ai_summary": "",
+        "total_pages": total_pages
     }
     db.add_assessment_job(job_record)
     
-    # Securely fetch the students for the specified class, ensuring the class
-    # belongs to the current user.
-    class_students = db.get_students_by_class_id(class_id=config.classId, user_id=user_id)
-
-    for student in class_students:
-        for section in config.sections:
-            for question in section.questions:
-                result_id = f"res_{uuid.uuid4().hex[:16]}"
-                unique_token = f"tok_{uuid.uuid4().hex}"
-                db.save_student_grade_result({
-                    "id": result_id, "job_id": job_id, "student_id": student.id,
-                    "question_id": question.id, "grade": None, "feedback": None,
-                    "extractedAnswer": None, "status": "pending_match",
-                    "report_token": unique_token, "answer_sheet_path": "", "content_type": ""
-                })
+    # The logic for creating placeholder results for every student has been removed.
+    # Result records will now be created only after a file has been successfully
+    # matched to a student in the analytics_and_matching helper.
+    pass

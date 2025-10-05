@@ -5,7 +5,8 @@ This module defines the SQLAlchemy ORM models for the `Assessment` and `Result`
 entities, which represent grading jobs and their individual outcomes, respectively.
 """
 
-from sqlalchemy import Column, String, Float, JSON, DateTime, ForeignKey
+import enum
+from sqlalchemy import Column, String, Float, JSON, DateTime, ForeignKey, Enum as SAEnum, CheckConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 # --- [CRITICAL MODIFICATION] ---
@@ -29,7 +30,8 @@ class Assessment(Base):
     answer_sheet_paths = Column(JSON, nullable=True)
     ai_summary = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+    total_pages = Column(Float, nullable=True)  # Total pages across all student submissions
+
     # --- [CRITICAL MODIFICATION 1/2: THE PHYSICAL LINK] ---
     # This column creates the foreign key relationship to the `users` table.
     # - UUID(as_uuid=True): Ensures type compatibility with the User.id primary key.
@@ -48,30 +50,55 @@ class Assessment(Base):
     # This relationship remains unchanged. When an Assessment is deleted, all its
     # child Result records are also deleted due to the cascade option.
     results = relationship("Result", back_populates="assessment", cascade="all, delete-orphan")
+    outsider_students = relationship("OutsiderStudent", back_populates="assessment", cascade="all, delete-orphan")
 
 
-# --- [NO MODIFICATIONS REQUIRED FOR RESULT MODEL] ---
-# The Result model does not need a direct link to the user. Its ownership is
-# inferred through its parent Assessment. This is a cleaner and more robust
-# data model, as it avoids redundant data.
+class ResultStatus(str, enum.Enum):
+    PROCESSING = "PROCESSING"
+    AI_GRADED = "AI_GRADED"
+    PENDING_REVIEW = "PENDING_REVIEW"
+    TEACHER_GRADED = "TEACHER_GRADED"
+    FAILED = "FAILED"
+
+class FinalizedBy(str, enum.Enum):
+    AI = "AI"
+    TEACHER = "TEACHER"
+
 class Result(Base):
     """
     SQLAlchemy model representing the grade and feedback for a single question
     for a single student within an Assessment.
     """
+    __tablename__ = "results"
     id = Column(String, primary_key=True, index=True)
     job_id = Column(String, ForeignKey("assessments.id"), nullable=False)
-    student_id = Column(String, ForeignKey("students.id"), nullable=False)
+    student_id = Column(String, ForeignKey("students.id"), nullable=True)  # Made nullable
+    outsider_student_id = Column(String, ForeignKey("outsider_students.id"), nullable=True)  # New column
     question_id = Column(String, nullable=False)
     
     grade = Column(Float, nullable=True)
     feedback = Column(String, nullable=True)
     extractedAnswer = Column(String, nullable=True)
-    status = Column(String, nullable=False, default='pending')
+    status = Column(String, nullable=False, default='pending') # Will be updated by migration
     report_token = Column(String, unique=True, index=True, nullable=True)
     answer_sheet_path = Column(String, nullable=True)
     content_type = Column(String, nullable=True)
     
-    # Relationships remain unchanged.
+    # New Columns
+    finalized_by = Column(SAEnum(FinalizedBy, name="finalizedby"), nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
     assessment = relationship("Assessment", back_populates="results")
     student = relationship("Student")
+    outsider_student = relationship("OutsiderStudent", back_populates="results")
+
+    ai_responses = Column(JSON, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            '(student_id IS NOT NULL AND outsider_student_id IS NULL) OR '
+            '(student_id IS NULL AND outsider_student_id IS NOT NULL)',
+            name='chk_result_student_or_outsider'
+        ),
+    )

@@ -13,6 +13,9 @@ the business logic layer in the `history_service`.
 
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 # --- Application-specific Imports ---
 
@@ -66,7 +69,7 @@ def save_generation_record(
             generated_content=payload.generated_content
         )
     except Exception as e:
-        print(f"ERROR saving generation record for user {current_user.id}: {e}")
+        logger.info(f"ERROR saving generation record for user {current_user.id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while saving the generation record."
@@ -98,7 +101,7 @@ def get_user_history(
             tool_id=tool_id
         )
     except Exception as e:
-        print(f"ERROR fetching history for user {current_user.id}: {e}")
+        logger.info(f"ERROR fetching history for user {current_user.id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while fetching the generation history."

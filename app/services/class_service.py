@@ -114,12 +114,11 @@ def delete_student_from_class(
     Business logic to delete a student, ensuring the user has ownership of the
     parent class.
 
-    The user_id and class_id are passed directly to the DatabaseService for a
-    secure, explicit delete operation.
+    Now removes the student from the class via the membership table,
+    but does NOT delete the student record itself (keeps them in assessments).
     """
-    # The `delete_student` method in the DatabaseService is designed to use
-    # class_id and user_id for a fully secure, context-aware deletion.
-    return db.delete_student(class_id=class_id, student_id=student_id, user_id=user_id)
+    # Remove the student from this specific class (removes membership only)
+    return db.remove_student_from_class(student_id=student_id, class_id=class_id)
 
 
 async def create_class_from_upload(
@@ -152,21 +151,17 @@ def get_all_classes_with_summary(user_id: str, db: DatabaseService) -> List[Dict
     if not all_classes:
         return []
 
-    # Securely fetch all students belonging to the authenticated user to calculate counts.
-    students_list_of_dicts = db.get_students_for_chatbot(user_id=user_id)
-    students_df = pd.DataFrame(students_list_of_dicts)
-    
-    student_counts = {}
-    if not students_df.empty and 'class_id' in students_df.columns:
-        student_counts = students_df.groupby('class_id').size().to_dict()
-
+    # Calculate student counts per class using the new junction table
     summary_list = []
     for cls in all_classes:
+        # Get students for this specific class
+        students_in_class = db.get_students_by_class_id(class_id=cls.id, user_id=user_id)
+
         summary_data = {
             "id": cls.id,
             "name": cls.name,
             "description": cls.description,
-            "studentCount": student_counts.get(str(cls.id), 0) # Ensure key is string for lookup
+            "studentCount": len(students_in_class)
         }
         summary_list.append(summary_data)
     return summary_list
@@ -177,22 +172,100 @@ def get_class_details_by_id(class_id: str, user_id: str, db: DatabaseService) ->
     Business logic to assemble the full details for the Class Details page,
     ensuring the user has ownership of the requested class.
     """
+    from ..db.models.assessment_models import ResultStatus
+    from ..services.assessment_helpers.analytics_and_matching import normalize_config_to_v2
+
     # Securely fetch the class, ensuring it belongs to the user.
     class_info = db.get_class_by_id(class_id=class_id, user_id=user_id)
     if not class_info:
         return None
-    
+
     # Securely fetch the students for that class.
     students_in_class = db.get_students_by_class_id(class_id=class_id, user_id=user_id)
-    
-    # V2 TODO: Analytics should be calculated from user-specific assessment data.
-    analytics_data = {"studentCount": len(students_in_class), "classAverage": 84, "assessmentsGraded": 5}
-    
+
+    # Get all assessments for this class
+    assessments = db.get_assessments_for_class(class_id=class_id, user_id=user_id)
+
+    # Calculate student grades and class statistics
+    student_grades = {}  # {student_id: {"total_earned": X, "total_possible": Y}}
+    completed_assessments = 0
+
+    for assessment in assessments:
+        # Check if assessment is completed/graded
+        if assessment.status == "Completed":
+            completed_assessments += 1
+
+        # Get config to calculate max score
+        cfg = normalize_config_to_v2(assessment)
+        max_total_score = sum(q.maxScore for s in cfg.sections for q in s.questions if q.maxScore is not None)
+
+        # Get all results for this assessment
+        for student in students_in_class:
+            results = db.get_results_for_student_and_job(
+                student_id=student.id,
+                job_id=assessment.id,
+                user_id=user_id
+            )
+
+            if results:
+                # Check if all results are graded (not pending)
+                all_graded = all(r.status != ResultStatus.PENDING_REVIEW.value for r in results)
+
+                if all_graded:
+                    # Calculate student's score for this assessment
+                    student_score = sum(float(r.grade) for r in results if r.grade is not None)
+
+                    # Initialize student entry if needed
+                    if student.id not in student_grades:
+                        student_grades[student.id] = {"total_earned": 0.0, "total_possible": 0.0}
+
+                    student_grades[student.id]["total_earned"] += student_score
+                    student_grades[student.id]["total_possible"] += max_total_score
+
+    # Calculate each student's overall grade percentage
+    students_with_grades = []
+    class_total_earned = 0.0
+    class_total_possible = 0.0
+
+    for student in students_in_class:
+        student_dict = {
+            "id": student.id,
+            "name": student.name,
+            "studentId": student.studentId,
+            "overallGrade": 0,
+            "performance_summary": student.performance_summary
+        }
+
+        if student.id in student_grades:
+            earned = student_grades[student.id]["total_earned"]
+            possible = student_grades[student.id]["total_possible"]
+
+            if possible > 0:
+                grade_percent = round((earned / possible) * 100)
+                student_dict["overallGrade"] = grade_percent
+
+                # Add to class totals
+                class_total_earned += earned
+                class_total_possible += possible
+
+        students_with_grades.append(student_dict)
+
+    # Calculate class average
+    class_average = 0
+    if class_total_possible > 0:
+        class_average = round((class_total_earned / class_total_possible) * 100)
+
+    analytics_data = {
+        "studentCount": len(students_in_class),
+        "classAverage": class_average,
+        "assessmentsGraded": completed_assessments
+    }
+
     return {
         "id": class_info.id,
         "name": class_info.name,
         "description": class_info.description,
-        "students": students_in_class, 
+        "students": students_with_grades,
         "analytics": analytics_data
     }
 

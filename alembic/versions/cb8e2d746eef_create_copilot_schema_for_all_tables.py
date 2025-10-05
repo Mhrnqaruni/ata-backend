@@ -1,18 +1,18 @@
-"""Initial schema for V1 with multi-tenancy
+"""Create copilot schema for all tables
 
-Revision ID: c83545b01f3a
+Revision ID: cb8e2d746eef
 Revises: 
-Create Date: 2025-09-20 01:56:45.788073
+Create Date: 2025-10-04 11:54:58.289915
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'c83545b01f3a'
+revision: str = 'cb8e2d746eef'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -93,6 +93,15 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_chatmessages_id'), 'chatmessages', ['id'], unique=False)
+    op.create_table('outsider_students',
+    sa.Column('id', sa.String(), nullable=False),
+    sa.Column('name', sa.String(), nullable=False),
+    sa.Column('assessment_id', sa.String(), nullable=False),
+    sa.ForeignKeyConstraint(['assessment_id'], ['assessments.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_outsider_students_assessment_id'), 'outsider_students', ['assessment_id'], unique=False)
+    op.create_index(op.f('ix_outsider_students_name'), 'outsider_students', ['name'], unique=False)
     op.create_table('students',
     sa.Column('id', sa.String(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
@@ -106,10 +115,34 @@ def upgrade() -> None:
     op.create_index(op.f('ix_students_id'), 'students', ['id'], unique=False)
     op.create_index(op.f('ix_students_name'), 'students', ['name'], unique=False)
     op.create_index(op.f('ix_students_studentId'), 'students', ['studentId'], unique=True)
+    op.create_table('ai_model_runs',
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('job_id', sa.String(), nullable=False),
+    sa.Column('student_id', sa.String(), nullable=True),
+    sa.Column('outsider_student_id', sa.String(), nullable=True),
+    sa.Column('question_id', sa.String(), nullable=False),
+    sa.Column('run_index', sa.SmallInteger(), nullable=False),
+    sa.Column('raw_json', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+    sa.Column('grade', sa.Numeric(precision=10, scale=2), nullable=True),
+    sa.Column('comment', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.CheckConstraint('(student_id IS NOT NULL AND outsider_student_id IS NULL) OR (student_id IS NULL AND outsider_student_id IS NOT NULL)', name='chk_aimodelrun_student_or_outsider'),
+    sa.ForeignKeyConstraint(['job_id'], ['assessments.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['outsider_student_id'], ['outsider_students.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['student_id'], ['students.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('job_id', 'outsider_student_id', 'question_id', 'run_index', name='_job_outsider_question_run_uc'),
+    sa.UniqueConstraint('job_id', 'student_id', 'question_id', 'run_index', name='_job_student_question_run_uc')
+    )
+    op.create_index(op.f('ix_ai_model_runs_job_id'), 'ai_model_runs', ['job_id'], unique=False)
+    op.create_index(op.f('ix_ai_model_runs_outsider_student_id'), 'ai_model_runs', ['outsider_student_id'], unique=False)
+    op.create_index(op.f('ix_ai_model_runs_question_id'), 'ai_model_runs', ['question_id'], unique=False)
+    op.create_index(op.f('ix_ai_model_runs_student_id'), 'ai_model_runs', ['student_id'], unique=False)
     op.create_table('results',
     sa.Column('id', sa.String(), nullable=False),
     sa.Column('job_id', sa.String(), nullable=False),
-    sa.Column('student_id', sa.String(), nullable=False),
+    sa.Column('student_id', sa.String(), nullable=True),
+    sa.Column('outsider_student_id', sa.String(), nullable=True),
     sa.Column('question_id', sa.String(), nullable=False),
     sa.Column('grade', sa.Float(), nullable=True),
     sa.Column('feedback', sa.String(), nullable=True),
@@ -118,7 +151,12 @@ def upgrade() -> None:
     sa.Column('report_token', sa.String(), nullable=True),
     sa.Column('answer_sheet_path', sa.String(), nullable=True),
     sa.Column('content_type', sa.String(), nullable=True),
+    sa.Column('finalized_by', sa.Enum('AI', 'TEACHER', name='finalizedby'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('ai_responses', sa.JSON(), nullable=True),
+    sa.CheckConstraint('(student_id IS NOT NULL AND outsider_student_id IS NULL) OR (student_id IS NULL AND outsider_student_id IS NOT NULL)', name='chk_result_student_or_outsider'),
     sa.ForeignKeyConstraint(['job_id'], ['assessments.id'], ),
+    sa.ForeignKeyConstraint(['outsider_student_id'], ['outsider_students.id'], ),
     sa.ForeignKeyConstraint(['student_id'], ['students.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -133,10 +171,18 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_results_report_token'), table_name='results')
     op.drop_index(op.f('ix_results_id'), table_name='results')
     op.drop_table('results')
+    op.drop_index(op.f('ix_ai_model_runs_student_id'), table_name='ai_model_runs')
+    op.drop_index(op.f('ix_ai_model_runs_question_id'), table_name='ai_model_runs')
+    op.drop_index(op.f('ix_ai_model_runs_outsider_student_id'), table_name='ai_model_runs')
+    op.drop_index(op.f('ix_ai_model_runs_job_id'), table_name='ai_model_runs')
+    op.drop_table('ai_model_runs')
     op.drop_index(op.f('ix_students_studentId'), table_name='students')
     op.drop_index(op.f('ix_students_name'), table_name='students')
     op.drop_index(op.f('ix_students_id'), table_name='students')
     op.drop_table('students')
+    op.drop_index(op.f('ix_outsider_students_name'), table_name='outsider_students')
+    op.drop_index(op.f('ix_outsider_students_assessment_id'), table_name='outsider_students')
+    op.drop_table('outsider_students')
     op.drop_index(op.f('ix_chatmessages_id'), table_name='chatmessages')
     op.drop_table('chatmessages')
     op.drop_index(op.f('ix_generations_user_id'), table_name='generations')

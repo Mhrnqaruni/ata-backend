@@ -1,12 +1,14 @@
-# /ata-backend/app/db/models/class_student_models.py (MODIFIED AND APPROVED)
+# /ata-backend/app/db/models/class_student_models.py (MODIFIED FOR MANY-TO-MANY)
 
 """
 This module defines the SQLAlchemy ORM models for the `Class` and `Student`
 entities, which represent a teacher's class roster and the individual students
 within it.
+
+Now supports many-to-many relationships through StudentClassMembership junction table.
 """
 
-from sqlalchemy import Column, String, Integer, ForeignKey
+from sqlalchemy import Column, String, Integer, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 # --- [CRITICAL MODIFICATION] ---
 # Import the UUID type from SQLAlchemy's PostgreSQL dialects. This is necessary
@@ -44,27 +46,55 @@ class Class(Base):
     # relationship defined in the `user_model.py` file.
     owner = relationship("User", back_populates="classes")
 
-    # This relationship remains unchanged. When a Class is deleted, all its
-    # child Student records are also deleted due to the cascade option.
-    students = relationship("Student", back_populates="class_", cascade="all, delete-orphan")
+    # Many-to-many relationship with Students through StudentClassMembership
+    student_memberships = relationship("StudentClassMembership", back_populates="class_", cascade="all, delete-orphan")
+    students = relationship("Student", secondary="student_class_memberships", viewonly=True)
 
 
-# --- [NO MODIFICATIONS REQUIRED FOR STUDENT MODEL] ---
-# The Student model does not need a direct link to the user. Its ownership is
-# correctly inferred through its parent Class.
 class Student(Base):
     """
-    SQLAlchemy model representing a single student within a Class.
+    SQLAlchemy model representing a single student.
+    Can belong to multiple classes through StudentClassMembership.
     """
+    __tablename__ = "students"
+
     id = Column(String, primary_key=True, index=True)
     name = Column(String, index=True, nullable=False)
     studentId = Column(String, unique=True, index=True, nullable=False)
-    
-    overallGrade = Column(Integer, nullable=True) 
+
+    overallGrade = Column(Integer, nullable=True)
     performance_summary = Column(String, nullable=True)
-    
-    # This foreign key correctly links a Student to its parent Class.
-    class_id = Column(String, ForeignKey("classes.id"), nullable=False)
-    
-    # This relationship correctly links a Student back to its parent Class object.
-    class_ = relationship("Class", back_populates="students")
+
+    # Many-to-many relationship with Classes through StudentClassMembership
+    class_memberships = relationship("StudentClassMembership", back_populates="student", cascade="all, delete-orphan")
+    classes = relationship("Class", secondary="student_class_memberships", viewonly=True)
+
+
+class StudentClassMembership(Base):
+    """
+    Junction table for the many-to-many relationship between Students and Classes.
+    """
+    __tablename__ = "student_class_memberships"
+
+    id = Column(String, primary_key=True, index=True)
+    student_id = Column(
+        String,
+        ForeignKey("students.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    class_id = Column(
+        String,
+        ForeignKey("classes.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Relationships
+    student = relationship("Student", back_populates="class_memberships")
+    class_ = relationship("Class", back_populates="student_memberships")
+
+    # Ensure each student-class pair is unique
+    __table_args__ = (
+        UniqueConstraint("student_id", "class_id", name="uq_student_class"),
+    )

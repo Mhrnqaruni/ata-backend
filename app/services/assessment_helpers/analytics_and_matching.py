@@ -20,7 +20,6 @@ import pandas as pd
 import asyncio
 
 from ...models import assessment_model
-from .. import ocr_service
 from ..database_service import DatabaseService
 
 # --- PURE UTILITY FUNCTIONS (Correct and Unchanged) ---
@@ -106,6 +105,41 @@ def calculate_analytics(all_results: List['Result'], config: assessment_model.As
         "performanceByQuestion": {k: round(v, 2) for k, v in question_perf.items()}
     }
 
+import uuid
+import os
+from .. import gemini_service, prompt_library
+from . import grading_pipeline
+
+def _create_results_for_entity(db: DatabaseService, job_id: str, entity_id: str, entity_type: str, config: Union[assessment_model.AssessmentConfig, assessment_model.AssessmentConfigV2], file_info: Dict, user_id: str):
+    """Creates placeholder result records for all questions for a given entity (student or outsider)."""
+    all_questions = [q for s in config.sections for q in s.questions] if isinstance(config, assessment_model.AssessmentConfigV2) else config.questions
+
+    for question in all_questions:
+        result_id = f"res_{uuid.uuid4().hex[:16]}"
+
+        result_payload = {
+            "id": result_id,
+            "job_id": job_id,
+            "question_id": question.id,
+            "grade": None,
+            "feedback": None,
+            "extractedAnswer": None,
+            "status": "pending_grade",
+            "answer_sheet_path": file_info.get('path', ''),
+            "content_type": file_info.get('contentType', '')
+        }
+
+        if entity_type == 'student':
+            result_payload['student_id'] = entity_id
+            result_payload['outsider_student_id'] = None
+        elif entity_type == 'outsider':
+            result_payload['student_id'] = None
+            result_payload['outsider_student_id'] = entity_id
+        else:
+            continue # Should not happen
+
+        db.save_student_grade_result(result_payload)
+
 # --- DATABASE-INTERACTIVE HELPER (Corrected and Secure) ---
 async def match_files_to_students(
     db: DatabaseService, 
@@ -113,23 +147,20 @@ async def match_files_to_students(
     user_id: str
 ):
     """
-    Matches uploaded answer sheets to students in the class roster using OCR.
-    This function is now fully user-aware.
+    Matches uploaded answer sheets to students. If a match is found, it creates
+    the necessary Result records. If a file does not match anyone on the roster,
+    it uses a multimodal AI call to extract the student's name from the document
+    image and creates a new "Outsider" student.
     """
-    # 1. Securely fetch the parent assessment job to verify ownership.
     job = db.get_assessment_job(job_id=job_id, user_id=user_id)
     if not job:
         print(f"ERROR: Job {job_id} not found or access denied for user {user_id} during file matching.")
         return
 
-    config = get_validated_config_from_job(job)
-
-    # 2. Securely fetch the student roster for the associated class.
+    config = normalize_config_to_v2(job)
     students = db.get_students_by_class_id(class_id=config.classId, user_id=user_id)
-    
     student_map = {s.name.lower().strip(): s.id for s in students}
     
-    # Robustly handle the unassigned_files JSON data.
     unassigned_files_data = job.answer_sheet_paths
     if isinstance(unassigned_files_data, str):
         unassigned_files = json.loads(unassigned_files_data)
@@ -140,7 +171,6 @@ async def match_files_to_students(
         print(f"WARNING: answer_sheet_paths for job {job_id} is not a list. Skipping matching.")
         return
 
-    # 3. Process each unassigned file.
     for file_info in unassigned_files:
         path = file_info.get('path')
         content_type = file_info.get('contentType')
@@ -150,25 +180,46 @@ async def match_files_to_students(
         try:
             with open(path, "rb") as f:
                 file_bytes = f.read()
-            # The ocr_service call is CPU-bound and is correctly run in a thread.
-            ocr_text = await asyncio.to_thread(ocr_service.extract_text_from_file, file_bytes, content_type)
-            
-            # Simple matching logic.
-            for student_name, student_id in student_map.items():
-                if student_name in ocr_text[:250].lower():
-                    # --- [THE DEFINITIVE FIX IS HERE] ---
-                    # The call to `update_student_result_path` now correctly includes
-                    # the `user_id`, satisfying the method's signature and completing
-                    # the security context propagation. This resolves the TypeError.
-                    db.update_student_result_path(
-                        job_id=job_id, 
-                        student_id=student_id, 
-                        path=path, 
-                        content_type=content_type, 
-                        user_id=user_id
-                    )
-                    # --- [END OF FIX] ---
-                    break 
+
+            # Use vision-based name extraction for matching
+            extracted_name = None
+            try:
+                # Use vision to extract student name from the document
+                result = await gemini_service.process_file_with_vision_json(
+                    file_bytes=file_bytes,
+                    mime_type=content_type,
+                    prompt=prompt_library.VISION_NAME_EXTRACTION_PROMPT,
+                    temperature=0.1,
+                    log_context="EXTRACT-NAME (Outsider Student)"
+                )
+                extracted_name = result['data'].get("studentName", "").strip()
+            except Exception as name_exc:
+                print(f"Could not extract name via vision AI for {path}: {name_exc}")
+                extracted_name = None
+
+            # Try to match the extracted name to rostered students
+            match_found = False
+            if extracted_name:
+                normalized_extracted = extracted_name.lower().strip()
+                for student_name, student_id in student_map.items():
+                    if student_name in normalized_extracted or normalized_extracted in student_name:
+                        print(f"Matched file {path} to rostered student {student_name} ({student_id}) via vision")
+                        _create_results_for_entity(db, job_id, student_id, 'student', config, file_info, user_id)
+                        match_found = True
+                        break
+
+            if not match_found:
+                # This is an outsider
+                outsider_name = extracted_name if extracted_name else "Unknown Student"
+                print(f"File {path} did not match. Creating new outsider student: {outsider_name}")
+
+                new_outsider = db.add_outsider_student({
+                    "name": outsider_name,
+                    "assessment_id": job_id
+                })
+
+                _create_results_for_entity(db, job_id, new_outsider.id, 'outsider', config, file_info, user_id)
+
         except FileNotFoundError:
             print(f"ERROR: File not found during matching for job {job_id}: {path}")
         except Exception as e:
