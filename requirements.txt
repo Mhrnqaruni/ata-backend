@@ -38,7 +38,8 @@ asyncpg
 
 # --- NEW: Security & Authentication ---
 # For secure password hashing (uses bcrypt algorithm).
-passlib[bcrypt]
+bcrypt==4.0.1
+passlib[bcrypt]==1.7.4
 # For creating, signing, and decoding JSON Web Tokens (JWTs).
 python-jose[cryptography]
 # For robust email validation in Pydantic models.
