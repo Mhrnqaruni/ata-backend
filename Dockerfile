@@ -2,7 +2,8 @@
 # Use a full Debian-based Python image that includes the necessary build tools
 # (compilers, development headers) to compile Python packages from source.
 # Naming this stage "builder" makes it easy to reference later.
-FROM python:3.10-bookworm as builder
+# Updated to Python 3.11 for better performance and stability
+FROM python:3.11-bookworm as builder
 
 # Set standard Python environment variables for containerized applications.
 # PYTHONDONTWRITEBYTECODE: Prevents Python from writing .pyc files to disk.
@@ -40,7 +41,8 @@ RUN pip wheel --no-cache-dir --wheel-dir /usr/src/app/wheels -r requirements.txt
 # ---- STAGE 2: FINAL PRODUCTION IMAGE ----
 # Start fresh from a "slim" Python image. This image is much smaller because
 # it does not include the build tools and development headers from the first stage.
-FROM python:3.10-slim-bookworm
+# Updated to Python 3.11 for better performance and stability
+FROM python:3.11-slim-bookworm
 
 # Set the working directory for the final image.
 WORKDIR /usr/src/app

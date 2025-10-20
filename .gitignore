@@ -109,3 +109,10 @@ app/data/*.csv
 !app/data/.gitkeep
 logs/
 *.log
+assessment_uploads/
+test.db
+node_modules/
+package-lock.json
+directory_map.txt
+direcotory generator.py
+appservicesdocument_parser_reload_trigger.txt
