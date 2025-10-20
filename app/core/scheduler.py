@@ -6,6 +6,7 @@ Uses APScheduler to run cleanup tasks automatically.
 """
 
 import os
+import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
@@ -28,7 +29,7 @@ def cleanup_old_files_task():
         # Get hours from environment variable, default to 12 hours
         hours_after_completion = int(os.getenv("FILE_CLEANUP_HOURS", "12"))
 
-        print(f"\n🧹 Running scheduled file cleanup (files older than {hours_after_completion}h)...")
+        print(f"\n[CLEANUP] Running scheduled file cleanup (files older than {hours_after_completion}h)...")
 
         cleanup_service = get_cleanup_service()
         stats = cleanup_service.cleanup_old_assessments(
@@ -37,14 +38,14 @@ def cleanup_old_files_task():
             dry_run=False
         )
 
-        print(f"✓ Cleanup complete:")
+        print(f"[CLEANUP] Cleanup complete:")
         print(f"  - Found: {stats['total_found']} eligible assessments")
         print(f"  - Deleted: {stats['deleted_count']} folders")
         print(f"  - Failed: {stats['failed_count']} folders")
         print(f"  - Space freed: {stats['space_freed_mb']} MB\n")
 
     except Exception as e:
-        print(f"✗ Error during scheduled cleanup: {str(e)}")
+        print(f"[CLEANUP] Error during scheduled cleanup: {str(e)}")
     finally:
         db.close()
 
@@ -57,10 +58,10 @@ def start_scheduler():
     # Format: "0 */6 * * *" means "run at minute 0 of every 6th hour"
     cleanup_schedule = os.getenv("FILE_CLEANUP_SCHEDULE", "0 */6 * * *")
 
-    # Add the cleanup task
+    # Add the cleanup task with explicit timezone to avoid zoneinfo compatibility issues
     scheduler.add_job(
         cleanup_old_files_task,
-        trigger=CronTrigger.from_crontab(cleanup_schedule),
+        trigger=CronTrigger.from_crontab(cleanup_schedule, timezone=pytz.UTC),
         id="file_cleanup",
         name="Clean up old assessment files",
         replace_existing=True
@@ -68,7 +69,7 @@ def start_scheduler():
 
     # Start the scheduler
     scheduler.start()
-    print(f"📅 Scheduler started: File cleanup will run on schedule: {cleanup_schedule}")
+    print(f"[SCHEDULER] Scheduler started: File cleanup will run on schedule: {cleanup_schedule}")
 
 
 def stop_scheduler():
@@ -77,4 +78,4 @@ def stop_scheduler():
     """
     if scheduler.running:
         scheduler.shutdown()
-        print("📅 Scheduler stopped")
+        print("[SCHEDULER] Scheduler stopped")

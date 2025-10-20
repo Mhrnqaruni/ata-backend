@@ -57,11 +57,17 @@ USER root
 # - tesseract-ocr: The OCR engine used by pytesseract.
 # - libgl1-mesa-glx, libglib2.0-0: Dependencies required by PyMuPDF (fitz) for rendering.
 # - libpq5: The runtime library for PostgreSQL, required by psycopg2.
+# - libreoffice: For DOCX to PDF conversion (preserves images, tables, formatting).
+# - libreoffice-writer: Writer component for document processing.
+# - fonts-liberation: Common fonts for better document rendering.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     libgl1-mesa-glx \
     libglib2.0-0 \
     libpq5 \
+    libreoffice \
+    libreoffice-writer \
+    fonts-liberation \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

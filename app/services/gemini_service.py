@@ -132,28 +132,26 @@ async def process_file_with_vision(file_bytes: bytes, mime_type: str, prompt: st
     Processes a file (PDF or image) using Gemini's vision capabilities.
     The AI will OCR, analyze, and respond according to the prompt.
     This replaces traditional OCR with AI vision for better handwriting recognition.
-    """
-    import tempfile
-    temp_file_path = None
-    try:
-        # Create a temporary file to upload to Gemini
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf' if 'pdf' in mime_type else '.png') as temp_file:
-            temp_file.write(file_bytes)
-            temp_file_path = temp_file.name
 
-        # Upload file to Gemini File API for processing
-        uploaded_file = genai.upload_file(
-            path=temp_file_path,
-            display_name="vision_temp_file",
-            mime_type=mime_type
-        )
+    Uses inline data (base64) instead of File API to avoid ragStoreName errors.
+    """
+    import base64
+    try:
+        # Convert file bytes to base64 for inline data
+        base64_data = base64.b64encode(file_bytes).decode('utf-8')
+
+        # Create inline data part for the image/PDF
+        inline_data = {
+            'mime_type': mime_type,
+            'data': base64_data
+        }
 
         model = genai.GenerativeModel(GEMINI_FLASH_MODEL)
         config = GenerationConfig(temperature=temperature)
 
-        # Send both the prompt and the file to the AI
+        # Send both the prompt and the inline data to the AI
         response = await model.generate_content_async(
-            [prompt, uploaded_file],
+            [prompt, inline_data],
             generation_config=config
         )
 
@@ -164,18 +162,14 @@ async def process_file_with_vision(file_bytes: bytes, mime_type: str, prompt: st
     except Exception as e:
         print(f"ERROR in process_file_with_vision: {e}")
         raise
-    finally:
-        # Clean up temporary file
-        if temp_file_path and os.path.exists(temp_file_path):
-            try:
-                os.unlink(temp_file_path)
-            except Exception:
-                pass
 
-async def process_file_with_vision_json(file_bytes: bytes, mime_type: str, prompt: str, temperature: float = 0.1, log_context: str = "") -> Dict:
+async def process_file_with_vision_json(file_bytes: bytes, mime_type: str, prompt: str, temperature: float = 0.1, log_context: str = "", max_retries: int = 3) -> Dict:
     """
     Processes a file (PDF or image) using Gemini's vision capabilities and returns JSON.
     The AI will OCR, analyze, and structure the response as JSON according to the prompt.
+
+    Uses inline data (base64) instead of File API to avoid ragStoreName errors.
+    Includes retry logic with better JSON extraction for complex documents.
 
     Args:
         file_bytes: The file content as bytes
@@ -183,73 +177,301 @@ async def process_file_with_vision_json(file_bytes: bytes, mime_type: str, promp
         prompt: The prompt to send to the AI
         temperature: Temperature setting for the AI
         log_context: Optional context string for token logging (e.g., "PARSE-QUESTION", "GRADE-STUDENT")
+        max_retries: Maximum number of retry attempts (default: 3)
 
     Returns:
         Dict with two keys: 'data' (the parsed JSON) and 'tokens' (usage metadata)
     """
-    import tempfile
-    temp_file_path = None
-    try:
-        # Create a temporary file to upload to Gemini
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf' if 'pdf' in mime_type else '.png') as temp_file:
-            temp_file.write(file_bytes)
-            temp_file_path = temp_file.name
+    import base64
+    import re
 
-        # Upload file to Gemini File API for processing
-        uploaded_file = genai.upload_file(
-            path=temp_file_path,
-            display_name="vision_json_temp_file",
-            mime_type=mime_type
-        )
+    # Convert file bytes to base64 for inline data (do this once)
+    base64_data = base64.b64encode(file_bytes).decode('utf-8')
 
-        model = genai.GenerativeModel(GEMINI_FLASH_MODEL)
-        config = GenerationConfig(
-            temperature=temperature,
-            response_mime_type="application/json"
-        )
+    # Create inline data part for the image/PDF
+    inline_data = {
+        'mime_type': mime_type,
+        'data': base64_data
+    }
 
-        # Send both the prompt and the file to the AI with JSON mode
-        response = await model.generate_content_async(
-            [prompt, uploaded_file],
-            generation_config=config
-        )
+    last_error = None
+    total_tokens_used = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
 
-        if not response.text:
-            raise ValueError("AI model returned an empty response.")
+    for attempt in range(max_retries):
+        try:
+            model = genai.GenerativeModel(GEMINI_FLASH_MODEL)
+            config = GenerationConfig(
+                temperature=temperature,
+                response_mime_type="application/json"
+            )
 
-        # Extract token usage data
-        tokens_used = {
-            'prompt_tokens': 0,
-            'completion_tokens': 0,
-            'total_tokens': 0
-        }
+            # Send both the prompt and the inline data to the AI with JSON mode
+            response = await model.generate_content_async(
+                [prompt, inline_data],
+                generation_config=config
+            )
 
-        if hasattr(response, 'usage_metadata') and response.usage_metadata:
-            tokens_used['prompt_tokens'] = getattr(response.usage_metadata, 'prompt_token_count', 0)
-            tokens_used['completion_tokens'] = getattr(response.usage_metadata, 'candidates_token_count', 0)
-            tokens_used['total_tokens'] = getattr(response.usage_metadata, 'total_token_count', 0)
+            if not response.text:
+                raise ValueError("AI model returned an empty response.")
 
-            # Log token usage
+            # Extract and accumulate token usage data
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                total_tokens_used['prompt_tokens'] += getattr(response.usage_metadata, 'prompt_token_count', 0)
+                total_tokens_used['completion_tokens'] += getattr(response.usage_metadata, 'candidates_token_count', 0)
+                total_tokens_used['total_tokens'] += getattr(response.usage_metadata, 'total_token_count', 0)
+
+            # Try to extract JSON from response (handle markdown code blocks)
+            response_text = response.text.strip()
+
+            # Remove markdown code blocks if present
+            if response_text.startswith('```'):
+                # Extract content between ```json and ``` or between ``` and ```
+                json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response_text, re.DOTALL)
+                if json_match:
+                    response_text = json_match.group(1).strip()
+
+            # Try to parse JSON
+            parsed_data = json.loads(response_text)
+
+            # Success! Log and return
             if log_context:
-                print(f"[TOKEN-USAGE] {log_context} - Prompt: {tokens_used['prompt_tokens']}, Completion: {tokens_used['completion_tokens']}, Total: {tokens_used['total_tokens']}")
+                print(f"[TOKEN-USAGE] {log_context} - Prompt: {total_tokens_used['prompt_tokens']}, Completion: {total_tokens_used['completion_tokens']}, Total: {total_tokens_used['total_tokens']}")
 
-        return {
-            'data': json.loads(response.text),
-            'tokens': tokens_used
-        }
-    except Exception as e:
-        print(f"ERROR in process_file_with_vision_json: {e}")
-        raise ValueError(f"Failed to get a valid JSON response from the vision AI. Error: {e}")
-    finally:
-        # Clean up temporary file
-        if temp_file_path and os.path.exists(temp_file_path):
+            return {
+                'data': parsed_data,
+                'tokens': total_tokens_used
+            }
+
+        except json.JSONDecodeError as e:
+            last_error = e
+
+            # Safe printing - handle Unicode encoding errors on Windows
             try:
-                os.unlink(temp_file_path)
-            except Exception:
-                pass
-    
+                print(f"[RETRY {attempt + 1}/{max_retries}] JSON parsing failed in {log_context}: {e}")
+                print(f"[RETRY {attempt + 1}/{max_retries}] Response length: {len(response.text) if response and response.text else 0} characters")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                print(f"[RETRY {attempt + 1}/{max_retries}] JSON parsing failed (contains special characters)")
+
+            # Try to print preview safely
+            if response and response.text:
+                try:
+                    # Try to print with ASCII-safe encoding
+                    safe_preview = response.text[:1000].encode('ascii', errors='replace').decode('ascii')
+                    print(f"[RETRY {attempt + 1}/{max_retries}] Response preview: {safe_preview}...")
+                except Exception:
+                    print(f"[RETRY {attempt + 1}/{max_retries}] Response contains non-printable characters")
+
+                # Show context around error position
+                error_pos = getattr(e, 'pos', None)
+                if error_pos:
+                    try:
+                        start = max(0, error_pos - 200)
+                        end = min(len(response.text), error_pos + 200)
+                        safe_context = response.text[start:end].encode('ascii', errors='replace').decode('ascii')
+                        print(f"[RETRY {attempt + 1}/{max_retries}] Context around error position {error_pos}: ...{safe_context}...")
+                    except Exception:
+                        print(f"[RETRY {attempt + 1}/{max_retries}] Error position: {error_pos}")
+
+            if attempt < max_retries - 1:
+                # Try again with slightly higher temperature for variety
+                temperature = min(temperature + 0.05, 0.3)
+            else:
+                # Final attempt failed - save to file for debugging instead of printing
+                try:
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.json', prefix='gemini_response_') as f:
+                        f.write(response.text if response and response.text else 'No response')
+                        temp_path = f.name
+                    print(f"[FINAL RETRY FAILED] Full AI response saved to: {temp_path}")
+                except Exception as save_err:
+                    print(f"[FINAL RETRY FAILED] Could not save response to file: {save_err}")
+
+                raise ValueError(f"Failed to get valid JSON after {max_retries} attempts. Last error: {e}")
+
+        except Exception as e:
+            last_error = e
+            print(f"[RETRY {attempt + 1}/{max_retries}] Error in {log_context}: {e}")
+
+            if attempt < max_retries - 1:
+                # Try again
+                continue
+            else:
+                raise ValueError(f"Failed to get a valid JSON response from the vision AI after {max_retries} attempts. Error: {e}")
+
+    # Should never reach here, but just in case
+    raise ValueError(f"Failed to get a valid JSON response from the vision AI. Last error: {last_error}")
 
 
+async def process_dual_files_with_vision_json(
+    file1_bytes: bytes,
+    file1_mime_type: str,
+    file2_bytes: bytes,
+    file2_mime_type: str,
+    prompt: str,
+    temperature: float = 0.1,
+    log_context: str = "",
+    max_retries: int = 3
+) -> Dict:
+    """
+    Processes TWO files (PDFs or images) using Gemini's vision capabilities and returns JSON.
+    This is specifically for document parsing where both question and answer key are provided.
+
+    Uses inline data (base64) instead of File API to avoid ragStoreName errors.
+    Includes retry logic with better JSON extraction for complex documents.
+
+    Args:
+        file1_bytes: The first file content as bytes
+        file1_mime_type: The MIME type of the first file
+        file2_bytes: The second file content as bytes
+        file2_mime_type: The MIME type of the second file
+        prompt: The prompt to send to the AI
+        temperature: Temperature setting for the AI
+        log_context: Optional context string for token logging
+        max_retries: Maximum number of retry attempts (default: 3)
+
+    Returns:
+        Dict with two keys: 'data' (the parsed JSON) and 'tokens' (usage metadata)
+    """
+    import base64
+    import re
+
+    # Convert both files to base64 for inline data (do this once)
+    file1_base64 = base64.b64encode(file1_bytes).decode('utf-8')
+    file2_base64 = base64.b64encode(file2_bytes).decode('utf-8')
+
+    # Create inline data parts for both files
+    inline_data1 = {
+        'mime_type': file1_mime_type,
+        'data': file1_base64
+    }
+
+    inline_data2 = {
+        'mime_type': file2_mime_type,
+        'data': file2_base64
+    }
+
+    last_error = None
+    total_tokens_used = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+
+    for attempt in range(max_retries):
+        try:
+            model = genai.GenerativeModel(GEMINI_FLASH_MODEL)
+            config = GenerationConfig(
+                temperature=temperature,
+                response_mime_type="application/json"
+            )
+
+            # Send prompt and both files to the AI with JSON mode
+            response = await model.generate_content_async(
+                [prompt, inline_data1, inline_data2],
+                generation_config=config
+            )
+
+            if not response.text:
+                raise ValueError("AI model returned an empty response.")
+
+            # Extract and accumulate token usage data
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                total_tokens_used['prompt_tokens'] += getattr(response.usage_metadata, 'prompt_token_count', 0)
+                total_tokens_used['completion_tokens'] += getattr(response.usage_metadata, 'candidates_token_count', 0)
+                total_tokens_used['total_tokens'] += getattr(response.usage_metadata, 'total_token_count', 0)
+
+            # Try to extract JSON from response (handle markdown code blocks)
+            response_text = response.text.strip()
+
+            # Remove markdown code blocks if present
+            if response_text.startswith('```'):
+                json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response_text, re.DOTALL)
+                if json_match:
+                    response_text = json_match.group(1).strip()
+
+            # Try to parse JSON
+            parsed_data = json.loads(response_text)
+
+            # VALIDATION: Check for empty questions array (Issue #2)
+            if 'sections' in parsed_data:
+                total_questions = sum(len(section.get('questions', [])) for section in parsed_data.get('sections', []))
+                print(f"[VALIDATION] {log_context} - Extracted {total_questions} questions from response")
+
+                # DIAGNOSTIC: Check if answers are populated
+                questions_with_answers = 0
+                for section in parsed_data.get('sections', []):
+                    for question in section.get('questions', []):
+                        if question.get('answer') and str(question.get('answer')).strip():
+                            questions_with_answers += 1
+                print(f"[VALIDATION] {log_context} - Questions with answers: {questions_with_answers}/{total_questions}")
+
+                if total_questions == 0:
+                    raise ValueError(f"AI returned valid JSON but with ZERO questions. This is invalid.")
+
+            # Success! Log and return
+            if log_context:
+                print(f"[TOKEN-USAGE] {log_context} - Prompt: {total_tokens_used['prompt_tokens']}, Completion: {total_tokens_used['completion_tokens']}, Total: {total_tokens_used['total_tokens']}")
+
+            return {
+                'data': parsed_data,
+                'tokens': total_tokens_used
+            }
+
+        except (json.JSONDecodeError, ValueError) as e:
+            last_error = e
+
+            # Safe printing - handle Unicode encoding errors on Windows
+            try:
+                error_type = "JSON parsing" if isinstance(e, json.JSONDecodeError) else "Validation"
+                print(f"[RETRY {attempt + 1}/{max_retries}] {error_type} failed in {log_context}: {e}")
+                print(f"[RETRY {attempt + 1}/{max_retries}] Response length: {len(response.text) if response and response.text else 0} characters")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                print(f"[RETRY {attempt + 1}/{max_retries}] Error occurred (contains special characters)")
+
+            # Try to print preview safely
+            if response and response.text:
+                try:
+                    # Try to print with ASCII-safe encoding
+                    safe_preview = response.text[:1000].encode('ascii', errors='replace').decode('ascii')
+                    print(f"[RETRY {attempt + 1}/{max_retries}] Response preview: {safe_preview}...")
+                except Exception:
+                    print(f"[RETRY {attempt + 1}/{max_retries}] Response contains non-printable characters")
+
+                # Show context around error position
+                error_pos = getattr(e, 'pos', None)
+                if error_pos:
+                    try:
+                        start = max(0, error_pos - 200)
+                        end = min(len(response.text), error_pos + 200)
+                        safe_context = response.text[start:end].encode('ascii', errors='replace').decode('ascii')
+                        print(f"[RETRY {attempt + 1}/{max_retries}] Context around error position {error_pos}: ...{safe_context}...")
+                    except Exception:
+                        print(f"[RETRY {attempt + 1}/{max_retries}] Error position: {error_pos}")
+
+            if attempt < max_retries - 1:
+                # Try again with slightly higher temperature for variety
+                temperature = min(temperature + 0.05, 0.3)
+            else:
+                # Final attempt failed - save to file for debugging instead of printing
+                try:
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.json', prefix='gemini_response_') as f:
+                        f.write(response.text if response and response.text else 'No response')
+                        temp_path = f.name
+                    print(f"[FINAL RETRY FAILED] Full AI response saved to: {temp_path}")
+                except Exception as save_err:
+                    print(f"[FINAL RETRY FAILED] Could not save response to file: {save_err}")
+
+                raise ValueError(f"Failed to get valid JSON after {max_retries} attempts. Last error: {e}")
+
+        except Exception as e:
+            last_error = e
+            print(f"[RETRY {attempt + 1}/{max_retries}] Error in {log_context}: {e}")
+
+            if attempt < max_retries - 1:
+                # Try again
+                continue
+            else:
+                raise ValueError(f"Failed to get a valid JSON response from the vision AI after {max_retries} attempts. Error: {e}")
+
+    # Should never reach here, but just in case
+    raise ValueError(f"Failed to get a valid JSON response from the vision AI. Last error: {last_error}")
 
 
 

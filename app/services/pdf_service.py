@@ -1,5 +1,6 @@
 import io
 from PIL import Image
+from PyPDF2 import PdfMerger, PdfReader
 
 def compress_image(image_bytes: bytes, max_size_kb: int = 150) -> bytes:
     """
@@ -52,3 +53,25 @@ def merge_images_to_pdf(image_bytes_list: list[bytes]) -> bytes:
         raise IOError(f"Failed to save images to PDF. Error: {e}")
 
     return pdf_buffer.getvalue()
+
+def merge_pdfs(pdf_bytes_list: list[bytes]) -> bytes:
+    """
+    Merges a list of PDF files (as bytes) into a single PDF file in memory.
+    """
+    if not pdf_bytes_list:
+        raise ValueError("Cannot merge an empty list of PDFs.")
+
+    merger = PdfMerger()
+
+    try:
+        for pdf_bytes in pdf_bytes_list:
+            pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+            merger.append(pdf_reader)
+
+        output_buffer = io.BytesIO()
+        merger.write(output_buffer)
+        merger.close()
+
+        return output_buffer.getvalue()
+    except Exception as e:
+        raise IOError(f"Failed to merge PDFs. Error: {e}")

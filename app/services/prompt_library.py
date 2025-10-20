@@ -811,16 +811,35 @@ You will receive TWO files:
    - The question text (including any sub-parts)
    - The marking allocation (e.g., "[10 marks]", "(5 pts)") - set to `maxScore`
    - If found in the Question Document, extract the answer/rubric
-4. **IF ANSWER KEY PROVIDED**:
-   - OCR the Answer Key Document
-   - Match answers to questions by number
-   - Copy the answer into both `"answer"` AND `"rubric"` fields
+4. **CRITICAL - ANSWER KEY PROCESSING**:
+   - You will receive TWO files: File 1 is the Question Document, File 2 is the Answer Key Document
+   - You MUST OCR and read BOTH documents completely
+   - Match answers from the Answer Key to questions by their question numbers (Q1, Q2, Question 1, etc.)
+   - For EACH question, you MUST populate the "answer" field with the correct answer from the Answer Key
+   - If the Answer Key contains marking rubrics or marking schemes, extract them to the "rubric" field
+   - Keep rubric and answer fields CONCISE (max 500 characters per field) - summarize if needed
+   - **IT IS CRITICAL** that you extract answers from File 2 (Answer Key) - do not leave answer fields empty
 5. **HANDLE HANDWRITING**: If the documents contain handwritten text, carefully transcribe it
 6. **EQUATIONS & DIAGRAMS**: If questions reference diagrams or contain equations, note them in the question text
 7. **MAX SCORE RULE**:
    - Only set `maxScore` if you find an explicit mark allocation
    - If no marks specified, set `maxScore` to `null`
-8. **OUTPUT FORMAT**: Return ONLY a valid JSON object (no markdown, no explanations)
+8. **SPECIAL CHARACTERS & JSON SAFETY**:
+   - Mathematical symbols (µ, σ, ≤, ≥, Greek letters, etc.) MUST be written as plain text equivalents
+   - Use: mu, sigma, <=, >=, alpha, beta, etc. instead of Unicode symbols
+   - Replace all curly quotes with straight quotes: " instead of " or "
+   - Replace all special dashes with regular hyphens: - instead of – or —
+   - All text must be JSON-safe - avoid characters that break JSON parsing
+9. **OUTPUT FORMAT**:
+   - Return ONLY raw JSON - NO markdown code blocks, NO explanations, NO extra text
+   - DO NOT wrap your response in ```json or ``` markers
+   - Start directly with the opening curly brace {{
+   - For complex multi-step questions, include ALL steps in the question text field
+   - Keep rubric and answer fields BRIEF - max 500 characters each
+10. **CRITICAL - NON-EMPTY QUESTIONS**:
+    - You MUST extract at least 1 question from the document
+    - The questions array must NEVER be empty
+    - If you cannot find questions, look harder - they are there
 
 **--- REQUIRED JSON STRUCTURE ---**
 
@@ -835,10 +854,10 @@ CRITICAL: The "title" field in sections is REQUIRED and must ALWAYS be a non-nul
       "total_score": null,
       "questions": [
         {{
-          "text": "The full question text",
-          "rubric": "The marking rubric or model answer",
+          "text": "The full question text (use plain text for math symbols)",
+          "rubric": "BRIEF marking rubric - key points only, max 500 chars",
           "maxScore": 10,
-          "answer": "The correct answer"
+          "answer": "BRIEF correct answer, max 500 chars"
         }}
       ]
     }}
@@ -853,6 +872,9 @@ CRITICAL: The "title" field in sections is REQUIRED and must ALWAYS be a non-nul
 - Maintain the original question numbering and structure
 - If uncertain about handwriting, transcribe your best interpretation
 - **CRITICAL**: The "title" field must NEVER be null - use "Main Section" if no title is found
+- **CRITICAL**: Keep rubrics and answers CONCISE - summarize if needed
+- **CRITICAL**: Use JSON-safe characters only - replace all special symbols with plain text
+- **CRITICAL**: The "answer" field MUST be populated from File 2 (Answer Key) - extract the correct answer for each question
 
 **--- NOW ANALYZE THE FILES ---**
 

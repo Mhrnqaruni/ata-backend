@@ -74,7 +74,7 @@ class StudentService:
                     report_url = f"/api/assessments/{job.id}/students/{student.id}/report.docx"
 
                 created_at_str = job.created_at.isoformat() if job.created_at else None
-                print(f"📅 [STUDENT SERVICE] Job {job.id}: created_at = {job.created_at}, ISO = {created_at_str}")
+                print(f"[STUDENT SERVICE] Job {job.id}: created_at = {job.created_at}, ISO = {created_at_str}")
 
                 class_rows.append(StudentAssessmentRow(
                     jobId=job.id,

@@ -28,8 +28,9 @@ class QuestionConfig(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str = Field(default_factory=lambda: f"q_{uuid.uuid4().hex[:8]}")
     text: str = Field(..., min_length=1)
-    rubric: str = Field(..., description="The specific grading rubric for this question. Can be an empty string.")
+    rubric: Optional[str] = Field(default="", description="The specific grading rubric for this question. Can be None or empty string.")
     maxScore: int = Field(default=10, gt=0)
+    answer: Optional[str] = Field(default="", description="The correct answer from the answer key document. Can be None or empty string.")
 
 class AssessmentConfig(BaseModel):
     # This model is for incoming data, so it doesn't strictly need from_attributes,

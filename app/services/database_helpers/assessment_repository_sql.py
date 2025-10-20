@@ -301,6 +301,19 @@ class AssessmentRepositorySQL:
             return []
         return self.db.query(OutsiderStudent).filter(OutsiderStudent.assessment_id == job_id).all()
 
+    def get_outsider_by_name_and_job(self, name: str, job_id: str, user_id: str) -> Optional[OutsiderStudent]:
+        """
+        Retrieves an outsider student by name and job ID, ensuring the job is owned by the user.
+        """
+        parent_job = self.get_job(job_id=job_id, user_id=user_id)
+        if not parent_job:
+            return None
+        return (
+            self.db.query(OutsiderStudent)
+            .filter(OutsiderStudent.assessment_id == job_id, OutsiderStudent.name == name)
+            .first()
+        )
+
     # --- [START OF NEW METHOD TO FIX ATTRIBUTEERROR] ---
     def get_student_result_path(self, job_id: str, student_id: str, user_id: str) -> Optional[str]:
         """

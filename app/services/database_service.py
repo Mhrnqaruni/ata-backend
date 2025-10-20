@@ -199,6 +199,9 @@ class DatabaseService:
     def get_all_outsider_students_for_job(self, job_id: str, user_id: str) -> List[OutsiderStudent]:
         return self.assessment_repo.get_all_outsider_students_for_job(job_id, user_id)
 
+    def get_outsider_by_name_and_job(self, name: str, job_id: str, user_id: str) -> Optional[OutsiderStudent]:
+        return self.assessment_repo.get_outsider_by_name_and_job(name, job_id, user_id)
+
     # --- MODIFIED: Chatbot Helper Methods ---
     def get_classes_for_chatbot(self, user_id: str) -> List[Dict]:
         return self.class_student_repo.get_classes_for_chatbot(user_id=user_id)

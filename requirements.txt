@@ -5,7 +5,7 @@ gunicorn==22.0.0
 uvicorn[standard]==0.29.0
 
 # AI & Data Processing
-google-generativeai
+google-generativeai==0.7.2
 pandas
 Pillow
 
@@ -16,6 +16,7 @@ python-docx
 fpdf2
 python-multipart
 openpyxl
+PyPDF2
 
 # Security & Utilities
 RestrictedPython==7.0

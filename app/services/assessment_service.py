@@ -76,9 +76,9 @@ class AssessmentService:
 
         # Count total pages across all student submissions
         from . import page_count_service
-        print(f"🔍 [ASSESSMENT SERVICE] Counting pages for {len(answer_sheets)} files...")
+        print(f"[ASSESSMENT SERVICE] Counting pages for {len(answer_sheets)} files...")
         total_pages = await page_count_service.count_total_pages(answer_sheets)
-        print(f"📊 [ASSESSMENT SERVICE] Total pages counted: {total_pages}")
+        print(f"[ASSESSMENT SERVICE] Total pages counted: {total_pages}")
 
         answer_sheet_data = job_creation._save_uploaded_files(job_id, answer_sheets)
         job_creation._create_initial_job_records_v2(self.db, job_id, config, answer_sheet_data, user_id, total_pages)
@@ -89,7 +89,7 @@ class AssessmentService:
             "message": "Assessment job created.",
             "totalPages": total_pages
         }
-        print(f"✅ [ASSESSMENT SERVICE] Returning response: {response}")
+        print(f"[ASSESSMENT SERVICE] Returning response: {response}")
         return response
 
     async def create_job_with_manual_uploads(
@@ -99,22 +99,41 @@ class AssessmentService:
         Creates a job, processes manually uploaded files keyed by student/outsider ID,
         and links everything in the database in a single transaction.
         """
+        print(f"[MANUAL-UPLOAD-START] ========== Starting Manual Upload Processing ==========")
+        print(f"[MANUAL-UPLOAD-START] Assessment: {config.assessmentName}")
+        print(f"[MANUAL-UPLOAD-START] Outsider names map: {outsider_names}")
+
         # 1. Create the base job and questions, but with no answer sheets yet.
         job_id = f"job_{uuid.uuid4().hex[:16]}"
-        job_creation._create_initial_job_records_v2(self.db, job_id, config, [], user_id)
+        job_creation._create_initial_job_records_v2(self.db, job_id, config, [], user_id, is_manual_upload=True)
+        print(f"[MANUAL-UPLOAD-START] Created job: {job_id}")
 
         # Create a map for quick lookup of outsider names by their temporary frontend ID
         outsider_name_map = {item['id']: item['name'] for item in outsider_names}
 
-        # 2. Process each set of files from the dynamic form data
-        for key, files in form_data.multi_items():
+        # 2. Group files by their key (to handle multiple files per student)
+        # DIAGNOSTIC: First, let's see ALL items in FormData
+        all_items = []
+        for key, value in form_data.multi_items():
+            if hasattr(value, 'filename'):
+                all_items.append((key, value.filename, value.content_type))
+            else:
+                all_items.append((key, str(value)[:50]))
+        print(f"[MANUAL-UPLOAD-FORMDATA] Raw FormData items: {all_items}")
+
+        files_by_key = {}
+        for key, file in form_data.multi_items():
             if not key.endswith('_files'):
                 continue
+            if key not in files_by_key:
+                files_by_key[key] = []
+            files_by_key[key].append(file)
 
-            # Ensure we have a list of UploadFile objects
-            if not isinstance(files, list):
-                files = [files]
+        print(f"[MANUAL-UPLOAD-GROUPED] Files grouped by key: {[(k, len(v)) for k, v in files_by_key.items()]}")
 
+        # 3. Process each set of files
+        for key, files in files_by_key.items():
+            print(f"[DEBUG] Processing key '{key}' with {len(files)} files")
             # Skip if no files were actually uploaded for this key
             if not files or not files[0].filename:
                 continue
@@ -140,13 +159,16 @@ class AssessmentService:
 
                 # 4. Create DB records (Result, AnswerSheet, and possibly OutsiderStudent)
                 if entity_type == 'student':
+                    print(f"[DEBUG] Creating results for student ID: {entity_id}")
                     analytics_and_matching._create_results_for_entity(self.db, job_id, entity_id, 'student', config, file_info, user_id)
                 elif entity_type == 'outsider':
                     outsider_name = outsider_name_map.get(entity_id, "Unknown Outsider")
+                    print(f"[DEBUG] Creating outsider with name '{outsider_name}' for entity_id '{entity_id}'")
                     new_outsider = self.db.add_outsider_student({
                         "name": outsider_name,
                         "assessment_id": job_id
                     })
+                    print(f"[DEBUG] Outsider created with DB ID: {new_outsider.id}")
                     analytics_and_matching._create_results_for_entity(self.db, job_id, new_outsider.id, 'outsider', config, file_info, user_id)
 
             except Exception as e:
@@ -161,42 +183,84 @@ class AssessmentService:
         if not student_id and not outsider_name:
             raise ValueError("Either a student_id or an outsider_name must be provided.")
 
+        print(f"[MANUAL-SUBMIT] Received {len(images)} images for job={job_id}, student_id={student_id}, outsider_name={outsider_name}")
+
         # 1. Compress and merge images into a single PDF
         compressed_images = [pdf_service.compress_image(await img.read()) for img in images]
         pdf_bytes = pdf_service.merge_images_to_pdf(compressed_images)
 
-        # 2. Save the generated PDF to a unique path
-        job_dir = os.path.join(ASSESSMENT_UPLOADS_DIR, job_id)
-        os.makedirs(job_dir, exist_ok=True)
-
-        entity_identifier = student_id if student_id else f"outsider_{uuid.uuid4().hex[:8]}"
-        pdf_filename = f"manual_{entity_identifier}.pdf"
-        pdf_path = os.path.join(job_dir, pdf_filename)
-
-        with open(pdf_path, "wb") as f:
-            f.write(pdf_bytes)
-
-        file_info = {"path": pdf_path, "contentType": "application/pdf"}
-
-        # 3. Get the assessment config
+        # 2. Get the assessment config
         job = self.db.get_assessment_job(job_id, user_id)
         if not job:
             raise ValueError(f"Job {job_id} not found.")
         config = analytics_and_matching.normalize_config_to_v2(job)
 
-        # 4. Create result records
+        # 3. Handle student vs outsider
         if student_id:
             # It's a rostered student
+            print(f"[MANUAL-SUBMIT] Processing rostered student: {student_id}")
+
+            # Save PDF
+            job_dir = os.path.join(ASSESSMENT_UPLOADS_DIR, job_id)
+            os.makedirs(job_dir, exist_ok=True)
+            pdf_filename = f"manual_{student_id}.pdf"
+            pdf_path = os.path.join(job_dir, pdf_filename)
+
+            with open(pdf_path, "wb") as f:
+                f.write(pdf_bytes)
+
+            file_info = {"path": pdf_path, "contentType": "application/pdf"}
             analytics_and_matching._create_results_for_entity(self.db, job_id, student_id, 'student', config, file_info, user_id)
             return {"message": f"Submission for student {student_id} processed successfully."}
         else:
-            # It's an outsider student
-            new_outsider = self.db.add_outsider_student({
-                "name": outsider_name,
-                "assessment_id": job_id
-            })
-            analytics_and_matching._create_results_for_entity(self.db, job_id, new_outsider.id, 'outsider', config, file_info, user_id)
-            return {"message": f"Submission for outsider {outsider_name} processed successfully."}
+            # It's an outsider student - check if they already exist for this job
+            print(f"[MANUAL-SUBMIT] Processing outsider: {outsider_name}")
+            existing_outsider = self.db.get_outsider_by_name_and_job(outsider_name, job_id, user_id)
+
+            if existing_outsider:
+                # Outsider already exists - append new pages to their existing PDF
+                print(f"[MANUAL-SUBMIT] Outsider '{outsider_name}' already exists (ID: {existing_outsider.id}), appending pages")
+
+                # Get existing PDF path
+                job_dir = os.path.join(ASSESSMENT_UPLOADS_DIR, job_id)
+                existing_pdf_filename = f"manual_outsider_{existing_outsider.id}.pdf"
+                existing_pdf_path = os.path.join(job_dir, existing_pdf_filename)
+
+                # Merge new PDF with existing PDF
+                if os.path.exists(existing_pdf_path):
+                    with open(existing_pdf_path, "rb") as f:
+                        existing_pdf_bytes = f.read()
+                    # Merge existing PDF + new PDF
+                    merged_pdf_bytes = pdf_service.merge_pdfs([existing_pdf_bytes, pdf_bytes])
+                else:
+                    # Existing PDF not found, use new PDF only
+                    merged_pdf_bytes = pdf_bytes
+
+                # Save merged PDF
+                with open(existing_pdf_path, "wb") as f:
+                    f.write(merged_pdf_bytes)
+
+                return {"message": f"Submission for outsider {outsider_name} appended successfully."}
+            else:
+                # Create new outsider
+                print(f"[MANUAL-SUBMIT] Creating new outsider: {outsider_name}")
+                new_outsider = self.db.add_outsider_student({
+                    "name": outsider_name,
+                    "assessment_id": job_id
+                })
+
+                # Save PDF
+                job_dir = os.path.join(ASSESSMENT_UPLOADS_DIR, job_id)
+                os.makedirs(job_dir, exist_ok=True)
+                pdf_filename = f"manual_outsider_{new_outsider.id}.pdf"
+                pdf_path = os.path.join(job_dir, pdf_filename)
+
+                with open(pdf_path, "wb") as f:
+                    f.write(pdf_bytes)
+
+                file_info = {"path": pdf_path, "contentType": "application/pdf"}
+                analytics_and_matching._create_results_for_entity(self.db, job_id, new_outsider.id, 'outsider', config, file_info, user_id)
+                return {"message": f"Submission for outsider {outsider_name} processed successfully."}
 
     def create_new_assessment_job(
         self, config: assessment_model.AssessmentConfig, answer_sheets: List[UploadFile], user_id: str
@@ -413,7 +477,17 @@ class AssessmentService:
         assessment_total_tokens = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
         try:
             self.db.update_job_status(job_id, user_id, assessment_model.JobStatus.PROCESSING.value)
-            await analytics_and_matching.match_files_to_students(self.db, job_id, user_id)
+
+            # Check if this is a manual upload job - if so, skip file matching as it's already done
+            job_record = self.db.get_assessment_job(job_id, user_id)
+            config_data = job_record.config if isinstance(job_record.config, dict) else {}
+            is_manual_upload = config_data.get('is_manual_upload', False)
+
+            if not is_manual_upload:
+                # Only match files for batch uploads
+                await analytics_and_matching.match_files_to_students(self.db, job_id, user_id)
+            else:
+                print(f"[MANUAL-UPLOAD-PROCESSING] Skipping file matching for manual upload job {job_id}")
 
             job_record = self.db.get_assessment_job(job_id, user_id)
             if not job_record:

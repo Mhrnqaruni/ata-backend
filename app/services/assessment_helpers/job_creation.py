@@ -100,7 +100,8 @@ def _create_initial_job_records_v2(
     config: assessment_model.AssessmentConfigV2,
     answer_sheet_data: List[Dict],
     user_id: str,
-    total_pages: int = 0
+    total_pages: int = 0,
+    is_manual_upload: bool = False
 ):
     """
     Specialist for creating the database records for a V2 assessment job.
@@ -115,11 +116,16 @@ def _create_initial_job_records_v2(
         answer_sheet_data: A list of dictionaries with file path and content type info.
         user_id: The unique ID of the user who owns this new assessment.
         total_pages: Total number of pages across all student submissions.
+        is_manual_upload: True if this job was created via manual upload (files already matched).
     """
+    # Store the is_manual_upload flag inside the config to avoid database schema changes
+    config_dict = config.model_dump()
+    config_dict['is_manual_upload'] = is_manual_upload
+
     job_record = {
         "id": job_id,
         "status": assessment_model.JobStatus.QUEUED.value,
-        "config": config.model_dump(),
+        "config": config_dict,
         "answer_sheet_paths": answer_sheet_data,
         "user_id": user_id,  # Stamp the owner's ID onto the new record.
         "created_at": datetime.datetime.now(datetime.timezone.utc),
