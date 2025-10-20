@@ -1,2 +1,0 @@
-release: alembic upgrade head
-web: gunicorn -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:$PORT app.main:app
