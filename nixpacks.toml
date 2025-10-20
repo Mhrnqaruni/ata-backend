@@ -1,11 +1,2 @@
-[phases.setup]
-nixPkgs = ["python310", "postgresql", "tesseract", "libreoffice"]
-
-[phases.install]
-cmds = ["pip install -r requirements.txt"]
-
-[phases.build]
-cmds = ["python -m compileall ."]
-
 [start]
-cmd = "sh -c 'alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:${PORT:-8080} app.main:app'"
+cmd = "sh -c 'alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:$PORT app.main:app'"
